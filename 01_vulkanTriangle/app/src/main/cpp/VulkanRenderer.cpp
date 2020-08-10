@@ -32,38 +32,41 @@ void VulkanRenderer::CreateVulkanDevice(ANativeWindow* platformWindow,
 
   device_extensions.push_back("VK_KHR_swapchain");
 
-  // **********************************************************
   // Create the Vulkan instance
   VkInstanceCreateInfo instanceCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-          .pNext = nullptr,
-          .pApplicationInfo = appInfo,
-          .enabledExtensionCount =
-          static_cast<uint32_t>(instance_extensions.size()),
-          .ppEnabledExtensionNames = instance_extensions.data(),
-          .enabledLayerCount = 0,
-          .ppEnabledLayerNames = nullptr,
+    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+    .pNext = nullptr,
+    .pApplicationInfo = appInfo,
+    .enabledExtensionCount =
+    static_cast<uint32_t>(instance_extensions.size()),
+    .ppEnabledExtensionNames = instance_extensions.data(),
+    .enabledLayerCount = 0,
+    .ppEnabledLayerNames = nullptr,
   };
   CALL_VK(vkCreateInstance(&instanceCreateInfo, nullptr, &mDeviceInfo.instance));
   VkAndroidSurfaceCreateInfoKHR createInfo{
-          .sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR,
-          .pNext = nullptr,
-          .flags = 0,
-          .window = platformWindow};
+    .sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR,
+    .pNext = nullptr,
+    .flags = 0,
+    .window = platformWindow
+  };
 
   CALL_VK(vkCreateAndroidSurfaceKHR(mDeviceInfo.instance, &createInfo, nullptr,
-                                    &mDeviceInfo.surface));
+                                          &mDeviceInfo.surface));
 
   // Find one GPU to use:
   // On Android, every GPU device is equal -- supporting
   // graphics/compute/present
   // for this sample, we use the very first GPU device found on the system
+  // Emulators can't get an available GPU device, so need to run it on a
+  // physical device.
   uint32_t gpuCount = 0;
   CALL_VK(vkEnumeratePhysicalDevices(mDeviceInfo.instance, &gpuCount, nullptr));
   assert(gpuCount);
   VkPhysicalDevice tmpGpus[gpuCount];
   CALL_VK(vkEnumeratePhysicalDevices(mDeviceInfo.instance, &gpuCount, tmpGpus));
-  mDeviceInfo.gpuDevice = tmpGpus[0];  // Pick up the first GPU Device
+  // Pick up the first GPU Device
+  mDeviceInfo.gpuDevice = tmpGpus[0];
 
   // Find a GFX queue family
   uint32_t queueFamilyCount;
@@ -85,41 +88,39 @@ void VulkanRenderer::CreateVulkanDevice(ANativeWindow* platformWindow,
   assert(queueFamilyIndex < queueFamilyCount);
   mDeviceInfo.queueFamilyIndex = queueFamilyIndex;
 
-  // Create a logical device (vulkan device)
-  float priorities[] = {
-          1.0f,
-  };
+  // Create a logical device (Vulkan device)
+  float priorities[] = {1.0f};
   VkDeviceQueueCreateInfo queueCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-          .pNext = nullptr,
-          .flags = 0,
-          .queueCount = 1,
-          .queueFamilyIndex = queueFamilyIndex,
-          .pQueuePriorities = priorities,
+    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .queueCount = 1,
+    .queueFamilyIndex = queueFamilyIndex,
+    .pQueuePriorities = priorities,
   };
 
   VkDeviceCreateInfo deviceCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-          .pNext = nullptr,
-          .queueCreateInfoCount = 1,
-          .pQueueCreateInfos = &queueCreateInfo,
-          .enabledLayerCount = 0,
-          .ppEnabledLayerNames = nullptr,
-          .enabledExtensionCount = static_cast<uint32_t>(device_extensions.size()),
-          .ppEnabledExtensionNames = device_extensions.data(),
-          .pEnabledFeatures = nullptr,
+    .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    .pNext = nullptr,
+    .queueCreateInfoCount = 1,
+    .pQueueCreateInfos = &queueCreateInfo,
+    .enabledLayerCount = 0,
+    .ppEnabledLayerNames = nullptr,
+    .enabledExtensionCount = static_cast<uint32_t>(device_extensions.size()),
+    .ppEnabledExtensionNames = device_extensions.data(),
+    .pEnabledFeatures = nullptr,
   };
 
   CALL_VK(vkCreateDevice(mDeviceInfo.gpuDevice, &deviceCreateInfo, nullptr,
-                         &mDeviceInfo.device));
-  vkGetDeviceQueue(mDeviceInfo.device, mDeviceInfo.queueFamilyIndex, 0, &mDeviceInfo.queue);
+                               &mDeviceInfo.device));
+  vkGetDeviceQueue(mDeviceInfo.device, mDeviceInfo.queueFamilyIndex, 0,
+                   &mDeviceInfo.queue);
 }
 
 void VulkanRenderer::CreateSwapChain() {
   LOG_I(gAppName.c_str(), "CreateSwapChain");
   memset(&mSwapchain, 0, sizeof(mSwapchain));
 
-  // **********************************************************
   // Get the surface capabilities because:
   //   - It contains the minimal and max length of the chain, we will need it
   //   - It's necessary to query the supported surface format (R8G8B8A8 for
@@ -136,42 +137,44 @@ void VulkanRenderer::CreateSwapChain() {
                                        &formatCount, formats);
   LOG_I(gAppName.c_str(), "Got %d formats", formatCount);
 
+  // Find out R8G8B8A8 format swapchain.
   uint32_t chosenFormat;
   for (chosenFormat = 0; chosenFormat < formatCount; chosenFormat++) {
-    if (formats[chosenFormat].format == VK_FORMAT_R8G8B8A8_UNORM) break;
+    if (formats[chosenFormat].format == VK_FORMAT_R8G8B8A8_UNORM) {
+      break;
+    }
   }
   assert(chosenFormat < formatCount);
 
   mSwapchain.displaySize = surfaceCapabilities.currentExtent;
   mSwapchain.displayFormat = formats[chosenFormat].format;
 
-  // **********************************************************
   // Create a swap chain (here we choose the minimum available number of surface
   // in the chain)
   VkSwapchainCreateInfoKHR swapchainCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-          .pNext = nullptr,
-          .surface = mDeviceInfo.surface,
-          .minImageCount = surfaceCapabilities.minImageCount,
-          .imageFormat = formats[chosenFormat].format,
-          .imageColorSpace = formats[chosenFormat].colorSpace,
-          .imageExtent = surfaceCapabilities.currentExtent,
-          .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-          .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-          .imageArrayLayers = 1,
-          .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-          .queueFamilyIndexCount = 1,
-          .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
-          .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-          .oldSwapchain = VK_NULL_HANDLE,
-          .clipped = VK_FALSE,
+    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext = nullptr,
+    .surface = mDeviceInfo.surface,
+    .minImageCount = surfaceCapabilities.minImageCount,
+    .imageFormat = formats[chosenFormat].format,
+    .imageColorSpace = formats[chosenFormat].colorSpace,
+    .imageExtent = surfaceCapabilities.currentExtent,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+    .imageArrayLayers = 1,
+    .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = 1,
+    .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
+    .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+    .oldSwapchain = VK_NULL_HANDLE,
+    .clipped = VK_FALSE,
   };
   CALL_VK(vkCreateSwapchainKHR(mDeviceInfo.device, &swapchainCreateInfo, nullptr,
-                               &mSwapchain.swapchain));
+                                     &mSwapchain.swapchain));
 
   // Get the length of the created swap chain
   CALL_VK(vkGetSwapchainImagesKHR(mDeviceInfo.device, mSwapchain.swapchain,
-                                  &mSwapchain.swapchainLength, nullptr));
+                                        &mSwapchain.swapchainLength, nullptr));
   delete[] formats;
 }
 
@@ -185,13 +188,13 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
   }
 
   VkApplicationInfo appInfo = {
-          .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-          .pNext = nullptr,
-          .apiVersion = VK_MAKE_VERSION(1, 0, 0),
-          .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-          .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-          .pApplicationName = gAppName.c_str(),
-          .pEngineName = "tutorial",
+    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+    .pNext = nullptr,
+    .apiVersion = VK_MAKE_VERSION(1, 0, 0),
+    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+    .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+    .pApplicationName = gAppName.c_str(),
+    .pEngineName = "tutorial",
   };
 
   // create a device
@@ -202,62 +205,62 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
 
   // create a render pass
   VkAttachmentDescription attachmentDescriptions{
-          .format = mSwapchain.displayFormat,
-          .samples = VK_SAMPLE_COUNT_1_BIT,
-          .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-          .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-          .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-          .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    .format = mSwapchain.displayFormat,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
   };
 
   VkAttachmentReference colourReference = {
-          .attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    .attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
   VkSubpassDescription subpassDescription{
-          .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-          .flags = 0,
-          .inputAttachmentCount = 0,
-          .pInputAttachments = nullptr,
-          .colorAttachmentCount = 1,
-          .pColorAttachments = &colourReference,
-          .pResolveAttachments = nullptr,
-          .pDepthStencilAttachment = nullptr,
-          .preserveAttachmentCount = 0,
-          .pPreserveAttachments = nullptr,
+    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+    .flags = 0,
+    .inputAttachmentCount = 0,
+    .pInputAttachments = nullptr,
+    .colorAttachmentCount = 1,
+    .pColorAttachments = &colourReference,
+    .pResolveAttachments = nullptr,
+    .pDepthStencilAttachment = nullptr,
+    .preserveAttachmentCount = 0,
+    .pPreserveAttachments = nullptr,
   };
   VkRenderPassCreateInfo renderPassCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-          .pNext = nullptr,
-          .attachmentCount = 1,
-          .pAttachments = &attachmentDescriptions,
-          .subpassCount = 1,
-          .pSubpasses = &subpassDescription,
-          .dependencyCount = 0,
-          .pDependencies = nullptr,
+    .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+    .pNext = nullptr,
+    .attachmentCount = 1,
+    .pAttachments = &attachmentDescriptions,
+    .subpassCount = 1,
+    .pSubpasses = &subpassDescription,
+    .dependencyCount = 0,
+    .pDependencies = nullptr,
   };
   CALL_VK(vkCreateRenderPass(mDeviceInfo.device, &renderPassCreateInfo, nullptr,
-                             &mRenderInfo.renderPass));
+                                   &mRenderInfo.renderPass));
 
-  // Create 2 frame buffers.
+  // Create double frame buffers.
   CreateFrameBuffers(mRenderInfo.renderPass);
 
-  CreateBuffers();  // create vertex buffers
+  // create vertex buffers
+  CreateBuffers();
 
   // Create graphics pipeline
   CreateGraphicsPipeline();
 
-  // -----------------------------------------------
   // Create a pool of command buffers to allocate command buffer from
   VkCommandPoolCreateInfo cmdPoolCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-          .pNext = nullptr,
-          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-          .queueFamilyIndex = mDeviceInfo.queueFamilyIndex,
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    .queueFamilyIndex = mDeviceInfo.queueFamilyIndex,
   };
   CALL_VK(vkCreateCommandPool(mDeviceInfo.device, &cmdPoolCreateInfo, nullptr,
-                              &mRenderInfo.cmdPool));
+                                    &mRenderInfo.cmdPool));
 
   // Record a command buffer that just clear the screen
   // 1 command buffer draw in 1 framebuffer
@@ -278,13 +281,13 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
        bufferIndex++) {
     // We start by creating and declare the "beginning" our command buffer
     VkCommandBufferBeginInfo cmdBufferBeginInfo{
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .pInheritanceInfo = nullptr,
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .pInheritanceInfo = nullptr
     };
     CALL_VK(vkBeginCommandBuffer(mRenderInfo.cmdBuffer[bufferIndex],
-                                 &cmdBufferBeginInfo));
+                                       &cmdBufferBeginInfo));
     // transition the display image to color attachment layout
     SetImageLayout(mRenderInfo.cmdBuffer[bufferIndex],
                    mSwapchain.displayImages[bufferIndex],
@@ -297,23 +300,25 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
     // renderpass
     VkClearValue clearVals{
             .color.float32[0] = 0.0f,
-            .color.float32[1] = 0.34f,
-            .color.float32[2] = 0.90f,
+            .color.float32[1] = 1.0f,
+            .color.float32[2] = 0.0f,
             .color.float32[3] = 1.0f,
     };
 
     VkRenderPassBeginInfo renderPassBeginInfo{
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .pNext = nullptr,
-            .renderPass = mRenderInfo.renderPass,
-            .framebuffer = mSwapchain.framebuffers[bufferIndex],
-            .renderArea = {.offset =
-                    {
-                            .x = 0, .y = 0,
-                    },
-                    .extent = mSwapchain.displaySize},
-            .clearValueCount = 1,
-            .pClearValues = &clearVals};
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .pNext = nullptr,
+      .renderPass = mRenderInfo.renderPass,
+      .framebuffer = mSwapchain.framebuffers[bufferIndex],
+      .renderArea = {
+        .offset = {
+          .x = 0, .y = 0,
+        },
+        .extent = mSwapchain.displaySize
+      },
+      .clearValueCount = 1,
+      .pClearValues = &clearVals
+    };
     vkCmdBeginRenderPass(mRenderInfo.cmdBuffer[bufferIndex], &renderPassBeginInfo,
                          VK_SUBPASS_CONTENTS_INLINE);
     // Bind what is necessary to the command buffer
@@ -324,6 +329,7 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
                            &mBuffer.vertexBuf, &offset);
 
     // Draw Triangle
+    // commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance
     vkCmdDraw(mRenderInfo.cmdBuffer[bufferIndex], 3, 1, 0, 0);
 
     vkCmdEndRenderPass(mRenderInfo.cmdBuffer[bufferIndex]);
@@ -340,22 +346,22 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
   // We need to create a fence to be able, in the main loop, to wait for our
   // draw command(s) to finish before swapping the framebuffers
   VkFenceCreateInfo fenceCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-          .pNext = nullptr,
-          .flags = 0,
+    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
   };
-  CALL_VK(
-          vkCreateFence(mDeviceInfo.device, &fenceCreateInfo, nullptr, &mRenderInfo.fence));
+  CALL_VK(vkCreateFence(mDeviceInfo.device, &fenceCreateInfo,
+                              nullptr, &mRenderInfo.fence));
 
   // We need to create a semaphore to be able to wait, in the main loop, for our
   // framebuffer to be available for us before drawing.
   VkSemaphoreCreateInfo semaphoreCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-          .pNext = nullptr,
-          .flags = 0,
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0
   };
   CALL_VK(vkCreateSemaphore(mDeviceInfo.device, &semaphoreCreateInfo, nullptr,
-                            &mRenderInfo.semaphore));
+                                  &mRenderInfo.semaphore));
 
   mInitialized = true;
   return true;
@@ -394,16 +400,16 @@ VkResult VulkanRenderer::loadShaderFromFile(const char* filePath, VkShaderModule
   AAsset_close(file);
 
   VkShaderModuleCreateInfo shaderModuleCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-          .pNext = nullptr,
-          .codeSize = fileLength,
-          .pCode = (const uint32_t*)fileContent,
-          .flags = 0,
+    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .pNext = nullptr,
+    .codeSize = fileLength,
+    .pCode = (const uint32_t*)fileContent,
+    .flags = 0,
   };
-  VkResult result = vkCreateShaderModule(
-          mDeviceInfo.device, &shaderModuleCreateInfo, nullptr, shaderOut);
+  VkResult result = vkCreateShaderModule(mDeviceInfo.device,
+                                         &shaderModuleCreateInfo,
+                                         nullptr, shaderOut);
   assert(result == VK_SUCCESS);
-
   delete[] fileContent;
 
   return result;
@@ -414,38 +420,34 @@ void VulkanRenderer::SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
                                     VkPipelineStageFlags srcStages,
                                     VkPipelineStageFlags destStages) {
   VkImageMemoryBarrier imageMemoryBarrier = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-          .pNext = NULL,
-          .srcAccessMask = 0,
-          .dstAccessMask = 0,
-          .oldLayout = oldImageLayout,
-          .newLayout = newImageLayout,
-          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .image = image,
-          .subresourceRange =
-                  {
-                          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                          .baseMipLevel = 0,
-                          .levelCount = 1,
-                          .baseArrayLayer = 0,
-                          .layerCount = 1,
-                  },
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    .pNext = NULL,
+    .srcAccessMask = 0,
+    .dstAccessMask = 0,
+    .oldLayout = oldImageLayout,
+    .newLayout = newImageLayout,
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image = image,
+    .subresourceRange = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+    },
   };
 
   switch (oldImageLayout) {
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
       imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
       imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_PREINITIALIZED:
       imageMemoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
       break;
-
     default:
       break;
   }
@@ -454,24 +456,19 @@ void VulkanRenderer::SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
     case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
       imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
       imageMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
       imageMemoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
       imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
       break;
-
     case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
       imageMemoryBarrier.dstAccessMask =
               VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
       break;
-
     default:
       break;
   }
@@ -484,48 +481,48 @@ void VulkanRenderer::SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
 void VulkanRenderer::CreateFrameBuffers(VkRenderPass& renderPass,
                                         VkImageView depthView) {
   // query display attachment to swapchain
-  uint32_t SwapchainImagesCount = 0;
+  uint32_t swapchainImagesCount = 0;
   CALL_VK(vkGetSwapchainImagesKHR(mDeviceInfo.device, mSwapchain.swapchain,
-                                  &SwapchainImagesCount, nullptr));
-  mSwapchain.displayImages.resize(SwapchainImagesCount);
+                                        &swapchainImagesCount, nullptr));
+  mSwapchain.displayImages.resize(swapchainImagesCount);
   CALL_VK(vkGetSwapchainImagesKHR(mDeviceInfo.device, mSwapchain.swapchain,
-                                  &SwapchainImagesCount,
-                                  mSwapchain.displayImages.data()));
+                                        &swapchainImagesCount,
+                                        mSwapchain.displayImages.data()));
 
   // create image view for each swapchain image
-  mSwapchain.displayViews.resize(SwapchainImagesCount);
-  for (uint32_t i = 0; i < SwapchainImagesCount; i++) {
+  mSwapchain.displayViews.resize(swapchainImagesCount);
+  for (uint32_t i = 0; i < swapchainImagesCount; i++) {
     VkImageViewCreateInfo viewCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = nullptr,
-            .image = mSwapchain.displayImages[i],
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = mSwapchain.displayFormat,
-            .components =
-                    {
-                            .r = VK_COMPONENT_SWIZZLE_R,
-                            .g = VK_COMPONENT_SWIZZLE_G,
-                            .b = VK_COMPONENT_SWIZZLE_B,
-                            .a = VK_COMPONENT_SWIZZLE_A,
-                    },
-            .subresourceRange =
-                    {
-                            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                            .baseMipLevel = 0,
-                            .levelCount = 1,
-                            .baseArrayLayer = 0,
-                            .layerCount = 1,
-                    },
-            .flags = 0,
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .image = mSwapchain.displayImages[i],
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = mSwapchain.displayFormat,
+      .components =
+      {
+        .r = VK_COMPONENT_SWIZZLE_R,
+        .g = VK_COMPONENT_SWIZZLE_G,
+        .b = VK_COMPONENT_SWIZZLE_B,
+        .a = VK_COMPONENT_SWIZZLE_A,
+      },
+      .subresourceRange =
+      {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      },
+      .flags = 0,
     };
     CALL_VK(vkCreateImageView(mDeviceInfo.device, &viewCreateInfo, nullptr,
-                              &mSwapchain.displayViews[i]));
+                                    &mSwapchain.displayViews[i]));
   }
   // create a framebuffer from each swapchain image
   mSwapchain.framebuffers.resize(mSwapchain.swapchainLength);
   for (uint32_t i = 0; i < mSwapchain.swapchainLength; i++) {
     VkImageView attachments[2] = {
-      mSwapchain.displayViews[i], depthView,
+      mSwapchain.displayViews[i], depthView, // depthView is NULL by default
     };
     VkFramebufferCreateInfo fbCreateInfo{
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -545,37 +542,38 @@ void VulkanRenderer::CreateFrameBuffers(VkRenderPass& renderPass,
 }
 
 void VulkanRenderer::CreateBuffers() {
-  // -----------------------------------------------
   // Create the triangle vertex buffer
 
   // Vertex positions
   const float vertexData[] = {
-          -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+    -1.0f, 1.0f, 0.0f,
+    1.0f, 1.0f, 0.0f,
+    0.0f, -1.0f, 0.0f,
   };
 
   // Create a vertex buffer
   VkBufferCreateInfo createBufferInfo{
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .pNext = nullptr,
-          .size = sizeof(vertexData),
-          .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-          .flags = 0,
-          .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-          .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
-          .queueFamilyIndexCount = 1,
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .pNext = nullptr,
+    .size = sizeof(vertexData),
+    .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    .flags = 0,
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
+    .queueFamilyIndexCount = 1,
   };
 
   CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
-                         &mBuffer.vertexBuf));
+                               &mBuffer.vertexBuf));
 
   VkMemoryRequirements memReq;
   vkGetBufferMemoryRequirements(mDeviceInfo.device, mBuffer.vertexBuf, &memReq);
 
   VkMemoryAllocateInfo allocInfo{
-          .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-          .pNext = nullptr,
-          .allocationSize = memReq.size,
-          .memoryTypeIndex = 0,  // Memory type assigned in the next step
+    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .pNext = nullptr,
+    .allocationSize = memReq.size,
+    .memoryTypeIndex = 0,  // Memory type assigned in the next step
   };
 
   // Assign the proper memory type for that buffer
@@ -590,12 +588,11 @@ void VulkanRenderer::CreateBuffers() {
 
   void* data;
   CALL_VK(vkMapMemory(mDeviceInfo.device, deviceMemory, 0, allocInfo.allocationSize,
-                      0, &data));
+                            0, &data));
   memcpy(data, vertexData, sizeof(vertexData));
   vkUnmapMemory(mDeviceInfo.device, deviceMemory);
 
-  CALL_VK(
-          vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
+  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
   return;
 }
 
@@ -603,22 +600,23 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
   memset(&mGfxPipeline, 0, sizeof(mGfxPipeline));
   // Create pipeline layout (empty)
   VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-          .pNext = nullptr,
-          .setLayoutCount = 0,
-          .pSetLayouts = nullptr,
-          .pushConstantRangeCount = 0,
-          .pPushConstantRanges = nullptr,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    .pNext = nullptr,
+    .setLayoutCount = 0,
+    .pSetLayouts = nullptr,
+    .pushConstantRangeCount = 0,
+    .pPushConstantRanges = nullptr,
   };
   CALL_VK(vkCreatePipelineLayout(mDeviceInfo.device, &pipelineLayoutCreateInfo,
-                                 nullptr, &mGfxPipeline.layout));
+                                       nullptr, &mGfxPipeline.layout));
 
   // No dynamic state in that tutorial
   VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .dynamicStateCount = 0,
-          .pDynamicStates = nullptr};
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .dynamicStateCount = 0,
+    .pDynamicStates = nullptr
+  };
 
   VkShaderModule vertexShader, fragmentShader;
   loadShaderFromFile("shaders/tri.vert.spv", &vertexShader, VERTEX_SHADER);
@@ -626,126 +624,127 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
 
   // Specify vertex and fragment shader stages
   VkPipelineShaderStageCreateInfo shaderStages[2]{
-          {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .pNext = nullptr,
-                  .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                  .module = vertexShader,
-                  .pSpecializationInfo = nullptr,
-                  .flags = 0,
-                  .pName = "main",
-          },
-          {
-                  .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                  .pNext = nullptr,
-                  .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  .module = fragmentShader,
-                  .pSpecializationInfo = nullptr,
-                  .flags = 0,
-                  .pName = "main",
-          }};
+  {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .pNext = nullptr,
+    .stage = VK_SHADER_STAGE_VERTEX_BIT,
+    .module = vertexShader,
+    .pSpecializationInfo = nullptr,
+    .flags = 0,
+    .pName = "main",
+  },
+  {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .pNext = nullptr,
+    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+    .module = fragmentShader,
+    .pSpecializationInfo = nullptr,
+    .flags = 0,
+    .pName = "main",
+  }};
 
   VkViewport viewports{
-          .minDepth = 0.0f,
-          .maxDepth = 1.0f,
-          .x = 0,
-          .y = 0,
-          .width = (float)mSwapchain.displaySize.width,
-          .height = (float)mSwapchain.displaySize.height,
+    .minDepth = 0.0f,
+    .maxDepth = 1.0f,
+    .x = 0,
+    .y = 0,
+    .width = (float)mSwapchain.displaySize.width,
+    .height = (float)mSwapchain.displaySize.height,
   };
 
-  VkRect2D scissor = {.extent = mSwapchain.displaySize,
-          .offset = {
-                  .x = 0, .y = 0,
-          }};
+  VkRect2D scissor = {
+    .extent = mSwapchain.displaySize,
+    .offset = {
+      .x = 0, .y = 0
+  }};
   // Specify viewport info
   VkPipelineViewportStateCreateInfo viewportInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .viewportCount = 1,
-          .pViewports = &viewports,
-          .scissorCount = 1,
-          .pScissors = &scissor,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .viewportCount = 1,
+    .pViewports = &viewports,
+    .scissorCount = 1,
+    .pScissors = &scissor,
   };
 
   // Specify multisample info
   VkSampleMask sampleMask = ~0u;
   VkPipelineMultisampleStateCreateInfo multisampleInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-          .sampleShadingEnable = VK_FALSE,
-          .minSampleShading = 0,
-          .pSampleMask = &sampleMask,
-          .alphaToCoverageEnable = VK_FALSE,
-          .alphaToOneEnable = VK_FALSE,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+    .sampleShadingEnable = VK_FALSE,
+    .minSampleShading = 0,
+    .pSampleMask = &sampleMask,
+    .alphaToCoverageEnable = VK_FALSE,
+    .alphaToOneEnable = VK_FALSE,
   };
 
-  // Specify color blend state
+  // Specify color blend state (disable it)
   VkPipelineColorBlendAttachmentState attachmentStates{
-          .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                            VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-          .blendEnable = VK_FALSE,
+    .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .blendEnable = VK_FALSE,
   };
   VkPipelineColorBlendStateCreateInfo colorBlendInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .logicOpEnable = VK_FALSE,
-          .logicOp = VK_LOGIC_OP_COPY,
-          .attachmentCount = 1,
-          .pAttachments = &attachmentStates,
-          .flags = 0,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .logicOpEnable = VK_FALSE,
+    .logicOp = VK_LOGIC_OP_COPY,
+    .attachmentCount = 1,
+    .pAttachments = &attachmentStates,
+    .flags = 0,
   };
 
   // Specify rasterizer info
   VkPipelineRasterizationStateCreateInfo rasterInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .depthClampEnable = VK_FALSE,
-          .rasterizerDiscardEnable = VK_FALSE,
-          .polygonMode = VK_POLYGON_MODE_FILL,
-          .cullMode = VK_CULL_MODE_NONE,
-          .frontFace = VK_FRONT_FACE_CLOCKWISE,
-          .depthBiasEnable = VK_FALSE,
-          .lineWidth = 1,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .depthClampEnable = VK_FALSE,
+    .rasterizerDiscardEnable = VK_FALSE,
+    .polygonMode = VK_POLYGON_MODE_FILL,
+    .cullMode = VK_CULL_MODE_BACK_BIT,
+    .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+    .depthBiasEnable = VK_FALSE,
+    .lineWidth = 1,
   };
 
   // Specify input assembler state
   VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-          .primitiveRestartEnable = VK_FALSE,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    .primitiveRestartEnable = VK_FALSE,
   };
 
   // Specify vertex input state
   VkVertexInputBindingDescription vertex_input_bindings{
-          .binding = 0,
-          .stride = 3 * sizeof(float),
-          .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    .binding = 0,
+    .stride = 3 * sizeof(float),
+    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
   };
   VkVertexInputAttributeDescription vertex_input_attributes[1]{{
-                                                                       .binding = 0,
-                                                                       .location = 0,
-                                                                       .format = VK_FORMAT_R32G32B32_SFLOAT,
-                                                                       .offset = 0,
-                                                               }};
+     .binding = 0,
+     .location = 0,
+     .format = VK_FORMAT_R32G32B32_SFLOAT,
+     .offset = 0
+ }};
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-          .pNext = nullptr,
-          .vertexBindingDescriptionCount = 1,
-          .pVertexBindingDescriptions = &vertex_input_bindings,
-          .vertexAttributeDescriptionCount = 1,
-          .pVertexAttributeDescriptions = vertex_input_attributes,
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .pNext = nullptr,
+    .vertexBindingDescriptionCount = 1,
+    .pVertexBindingDescriptions = &vertex_input_bindings,
+    .vertexAttributeDescriptionCount = 1,
+    .pVertexAttributeDescriptions = vertex_input_attributes
   };
 
   // Create the pipeline cache
   VkPipelineCacheCreateInfo pipelineCacheInfo{
-          .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
-          .pNext = nullptr,
-          .initialDataSize = 0,
-          .pInitialData = nullptr,
-          .flags = 0,  // reserved, must be 0
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+    .pNext = nullptr,
+    .initialDataSize = 0,
+    .pInitialData = nullptr,
+    .flags = 0,  // reserved, must be 0
   };
 
   CALL_VK(vkCreatePipelineCache(mDeviceInfo.device, &pipelineCacheInfo, nullptr,
@@ -753,30 +752,30 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
 
   // Create the pipeline
   VkGraphicsPipelineCreateInfo pipelineCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-          .pNext = nullptr,
-          .flags = 0,
-          .stageCount = 2,
-          .pStages = shaderStages,
-          .pVertexInputState = &vertexInputInfo,
-          .pInputAssemblyState = &inputAssemblyInfo,
-          .pTessellationState = nullptr,
-          .pViewportState = &viewportInfo,
-          .pRasterizationState = &rasterInfo,
-          .pMultisampleState = &multisampleInfo,
-          .pDepthStencilState = nullptr,
-          .pColorBlendState = &colorBlendInfo,
-          .pDynamicState = &dynamicStateInfo,
-          .layout = mGfxPipeline.layout,
-          .renderPass = mRenderInfo.renderPass,
-          .subpass = 0,
-          .basePipelineHandle = VK_NULL_HANDLE,
-          .basePipelineIndex = 0,
+    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .stageCount = 2,
+    .pStages = shaderStages,
+    .pVertexInputState = &vertexInputInfo,
+    .pInputAssemblyState = &inputAssemblyInfo,
+    .pTessellationState = nullptr,
+    .pViewportState = &viewportInfo,
+    .pRasterizationState = &rasterInfo,
+    .pMultisampleState = &multisampleInfo,
+    .pDepthStencilState = nullptr,
+    .pColorBlendState = &colorBlendInfo,
+    .pDynamicState = &dynamicStateInfo,
+    .layout = mGfxPipeline.layout,
+    .renderPass = mRenderInfo.renderPass,
+    .subpass = 0,
+    .basePipelineHandle = VK_NULL_HANDLE,
+    .basePipelineIndex = 0,
   };
 
   VkResult pipelineResult = vkCreateGraphicsPipelines(
-          mDeviceInfo.device, mGfxPipeline.cache, 1, &pipelineCreateInfo, nullptr,
-          &mGfxPipeline.pipeline);
+                              mDeviceInfo.device, mGfxPipeline.cache, 1, &pipelineCreateInfo, nullptr,
+                              &mGfxPipeline.pipeline);
 
   // We don't need the shaders anymore, we can release their memory
   vkDestroyShaderModule(mDeviceInfo.device, vertexShader, nullptr);
