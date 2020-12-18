@@ -12,7 +12,6 @@
 #include "utils.h"
 #include "VulkanRenderer.h"
 #include "Object.h"
-#include "component/Geometry.h"
 
 static const char* kTAG = "01-Vulkan-Triangle";
 

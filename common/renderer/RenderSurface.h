@@ -22,7 +22,7 @@ public:
 private:
   struct VulkanBufferInfo {
     VkBuffer vertexBuf;
-    VkBuffer indexBuf = nullptr;
+    VkBuffer indexBuf = 0;
   };
 
   struct VulkanGfxPipelineInfo {

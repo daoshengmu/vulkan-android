@@ -17,7 +17,6 @@ add_library(vktuts SHARED
         ${WRAPPER_DIR}/vulkan_wrapper.cpp
         ${SRC_RENDERER_DIR}/VulkanRenderer.cpp
         ${SRC_RENDERER_DIR}/Object.cpp
-        ${SRC_RENDERER_DIR}/component/Geometry.cpp
         ${SRC_RENDERER_DIR}/component/Material.cpp
         )
 
