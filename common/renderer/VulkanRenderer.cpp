@@ -6,7 +6,9 @@
 
 #include <android/log.h>
 #include <android_native_app_glue.h>
+#include <string>
 #include <vector>
+#include <component/Material.h>
 #include "vulkan_wrapper.h"
 #include "utils.h"
 
@@ -178,7 +180,7 @@ void VulkanRenderer::CreateSwapChain() {
   delete[] formats;
 }
 
-bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
+bool VulkanRenderer::Init(android_app* app, const std::string& aAppName) {
   mAppContext = app;
   gAppName = aAppName;
 
@@ -246,122 +248,18 @@ bool VulkanRenderer::Init(android_app* app, std::string aAppName) {
   // Create double frame buffers.
   CreateFrameBuffers(mRenderInfo.renderPass);
 
+  // TODO: create textures.
+
   // create vertex buffers
-  CreateBuffers();
+  //CreateBuffers();
 
-  // Create graphics pipeline
-  CreateGraphicsPipeline();
+  // Create graphics pipeline (shaders)
+//  VkShaderModule vertexShader, fragmentShader;
+//  loadShaderFromFile("shaders/tri.vert.spv", &vertexShader, VERTEX_SHADER);
+//  loadShaderFromFile("shaders/tri.frag.spv", &fragmentShader, FRAGMENT_SHADER);
+//  CreateGraphicsPipeline(vertexShader, fragmentShader);
 
-  // Create a pool of command buffers to allocate command buffer from
-  VkCommandPoolCreateInfo cmdPoolCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    .queueFamilyIndex = mDeviceInfo.queueFamilyIndex,
-  };
-  CALL_VK(vkCreateCommandPool(mDeviceInfo.device, &cmdPoolCreateInfo, nullptr,
-                                    &mRenderInfo.cmdPool));
-
-  // Record a command buffer that just clear the screen
-  // 1 command buffer draw in 1 framebuffer
-  // In our case we need 2 command as we have 2 framebuffer
-  mRenderInfo.cmdBufferLen = mSwapchain.swapchainLength;
-  mRenderInfo.cmdBuffer = new VkCommandBuffer[mSwapchain.swapchainLength];
-  VkCommandBufferAllocateInfo cmdBufferCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-          .pNext = nullptr,
-          .commandPool = mRenderInfo.cmdPool,
-          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-          .commandBufferCount = mRenderInfo.cmdBufferLen
-  };
-  CALL_VK(vkAllocateCommandBuffers(mDeviceInfo.device, &cmdBufferCreateInfo,
-                                         mRenderInfo.cmdBuffer));
-
-  for (int bufferIndex = 0; bufferIndex < mSwapchain.swapchainLength;
-       bufferIndex++) {
-    // We start by creating and declare the "beginning" our command buffer
-    VkCommandBufferBeginInfo cmdBufferBeginInfo{
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-      .pInheritanceInfo = nullptr
-    };
-    CALL_VK(vkBeginCommandBuffer(mRenderInfo.cmdBuffer[bufferIndex],
-                                       &cmdBufferBeginInfo));
-    // transition the display image to color attachment layout
-    SetImageLayout(mRenderInfo.cmdBuffer[bufferIndex],
-                   mSwapchain.displayImages[bufferIndex],
-                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
-
-    // Now we start a renderpass. Any draw command has to be recorded in a
-    // renderpass
-    VkClearValue clearVals{
-            .color.float32[0] = 0.0f,
-            .color.float32[1] = 1.0f,
-            .color.float32[2] = 0.0f,
-            .color.float32[3] = 1.0f,
-    };
-
-    VkRenderPassBeginInfo renderPassBeginInfo{
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .pNext = nullptr,
-      .renderPass = mRenderInfo.renderPass,
-      .framebuffer = mSwapchain.framebuffers[bufferIndex],
-      .renderArea = {
-        .offset = {
-          .x = 0, .y = 0,
-        },
-        .extent = mSwapchain.displaySize
-      },
-      .clearValueCount = 1,
-      .pClearValues = &clearVals
-    };
-    vkCmdBeginRenderPass(mRenderInfo.cmdBuffer[bufferIndex], &renderPassBeginInfo,
-                         VK_SUBPASS_CONTENTS_INLINE);
-    // Bind what is necessary to the command buffer
-    vkCmdBindPipeline(mRenderInfo.cmdBuffer[bufferIndex],
-                      VK_PIPELINE_BIND_POINT_GRAPHICS, mGfxPipeline.pipeline);
-    VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(mRenderInfo.cmdBuffer[bufferIndex], 0, 1,
-                           &mBuffer.vertexBuf, &offset);
-
-    // Draw Triangle
-    // commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance
-    vkCmdDraw(mRenderInfo.cmdBuffer[bufferIndex], 3, 1, 0, 0);
-
-    vkCmdEndRenderPass(mRenderInfo.cmdBuffer[bufferIndex]);
-    // transition back to swapchain image to PRESENT_SRC_KHR
-    SetImageLayout(mRenderInfo.cmdBuffer[bufferIndex],
-                   mSwapchain.displayImages[bufferIndex],
-                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-    CALL_VK(vkEndCommandBuffer(mRenderInfo.cmdBuffer[bufferIndex]));
-  }
-
-  // We need to create a fence to be able, in the main loop, to wait for our
-  // draw command(s) to finish before swapping the framebuffers
-  VkFenceCreateInfo fenceCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = 0,
-  };
-  CALL_VK(vkCreateFence(mDeviceInfo.device, &fenceCreateInfo,
-                              nullptr, &mRenderInfo.fence));
-
-  // We need to create a semaphore to be able to wait, in the main loop, for our
-  // framebuffer to be available for us before drawing.
-  VkSemaphoreCreateInfo semaphoreCreateInfo{
-    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-    .pNext = nullptr,
-    .flags = 0
-  };
-  CALL_VK(vkCreateSemaphore(mDeviceInfo.device, &semaphoreCreateInfo, nullptr,
-                                  &mRenderInfo.semaphore));
+//  CreateCommandBuffer();
 
   mInitialized = true;
   return true;
@@ -386,7 +284,7 @@ bool VulkanRenderer::MapMemoryTypeToIndex(uint32_t typeBits, VkFlags requirement
   return false;
 }
 
-VkResult VulkanRenderer::loadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
+VkResult VulkanRenderer::LoadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
                                             ShaderType type) {
   // Read the file
   assert(mAppContext);
@@ -541,21 +439,21 @@ void VulkanRenderer::CreateFrameBuffers(VkRenderPass& renderPass,
   }
 }
 
-void VulkanRenderer::CreateBuffers() {
-  // Create the triangle vertex buffer
+//void VulkanRenderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+//                                  VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+//
+//}
 
-  // Vertex positions
-  const float vertexData[] = {
-    -1.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    0.0f, -1.0f, 0.0f,
-  };
+// vertex buffer
+void VulkanRenderer::CreateVertexBuffer(const std::vector<float>& aVertexData, RenderSurface& aSurf) {
 
+  aSurf.mVertexData = aVertexData;
+  const size_t size = aVertexData.size() * sizeof(float);
   // Create a vertex buffer
   VkBufferCreateInfo createBufferInfo{
     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
     .pNext = nullptr,
-    .size = sizeof(vertexData),
+    .size = size, // sizeof(vertexData),
     .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
     .flags = 0,
     .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -563,11 +461,14 @@ void VulkanRenderer::CreateBuffers() {
     .queueFamilyIndexCount = 1,
   };
 
+//  CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
+//                               &mBuffer.vertexBuf));
   CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
-                               &mBuffer.vertexBuf));
+                         &aSurf.mBuffer.vertexBuf));
 
   VkMemoryRequirements memReq;
-  vkGetBufferMemoryRequirements(mDeviceInfo.device, mBuffer.vertexBuf, &memReq);
+//  vkGetBufferMemoryRequirements(mDeviceInfo.device, mBuffer.vertexBuf, &memReq);
+  vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf.mBuffer.vertexBuf, &memReq);
 
   VkMemoryAllocateInfo allocInfo{
     .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -589,15 +490,66 @@ void VulkanRenderer::CreateBuffers() {
   void* data;
   CALL_VK(vkMapMemory(mDeviceInfo.device, deviceMemory, 0, allocInfo.allocationSize,
                             0, &data));
-  memcpy(data, vertexData, sizeof(vertexData));
+  memcpy(data, aVertexData.data(), size);
   vkUnmapMemory(mDeviceInfo.device, deviceMemory);
 
-  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
-  return;
+//  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
+  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aSurf.mBuffer.vertexBuf, deviceMemory, 0));
 }
 
-VkResult VulkanRenderer::CreateGraphicsPipeline() {
-  memset(&mGfxPipeline, 0, sizeof(mGfxPipeline));
+void VulkanRenderer::CreateIndexBuffer(const std::vector<uint16_t>& aIndexData, RenderSurface& aSurf) {
+
+  aSurf.mIndexData = aIndexData;
+  const size_t size = aIndexData.size() * sizeof(uint16_t);
+  // Create a index buffer
+  VkBufferCreateInfo createBufferInfo{
+          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+          .pNext = nullptr,
+          .size = size,
+          .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          .flags = 0,
+          .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+          .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
+          .queueFamilyIndexCount = 1,
+  };
+
+  CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
+                         &aSurf.mBuffer.indexBuf));
+
+  VkMemoryRequirements memReq;
+  vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf.mBuffer.indexBuf, &memReq);
+
+  VkMemoryAllocateInfo allocInfo{
+          .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+          .pNext = nullptr,
+          .allocationSize = memReq.size,
+          .memoryTypeIndex = 0,  // Memory type assigned in the next step
+  };
+
+  // Assign the proper memory type for that buffer
+  MapMemoryTypeToIndex(memReq.memoryTypeBits,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       &allocInfo.memoryTypeIndex);
+
+  // Allocate memory for the buffer
+  VkDeviceMemory deviceMemory;
+  CALL_VK(vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr, &deviceMemory));
+
+  void* data;
+  CALL_VK(vkMapMemory(mDeviceInfo.device, deviceMemory, 0, allocInfo.allocationSize,
+                      0, &data));
+  memcpy(data, aIndexData.data(), size);
+  vkUnmapMemory(mDeviceInfo.device, deviceMemory);
+
+//  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
+  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aSurf.mBuffer.indexBuf, deviceMemory, 0));
+}
+
+VkResult VulkanRenderer::CreateGraphicsPipeline(VkShaderModule aVertexShader,
+                                                VkShaderModule aFragmentShader,
+                                                RenderSurface& aSurf) {
+  memset(&aSurf.mGfxPipeline, 0, sizeof(RenderSurface::VulkanGfxPipelineInfo));
   // Create pipeline layout (empty)
   VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -608,7 +560,7 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
     .pPushConstantRanges = nullptr,
   };
   CALL_VK(vkCreatePipelineLayout(mDeviceInfo.device, &pipelineLayoutCreateInfo,
-                                       nullptr, &mGfxPipeline.layout));
+                                       nullptr, &aSurf.mGfxPipeline.layout));
 
   // No dynamic state in that tutorial
   VkPipelineDynamicStateCreateInfo dynamicStateInfo = {
@@ -618,30 +570,27 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
     .pDynamicStates = nullptr
   };
 
-  VkShaderModule vertexShader, fragmentShader;
-  loadShaderFromFile("shaders/tri.vert.spv", &vertexShader, VERTEX_SHADER);
-  loadShaderFromFile("shaders/tri.frag.spv", &fragmentShader, FRAGMENT_SHADER);
-
   // Specify vertex and fragment shader stages
   VkPipelineShaderStageCreateInfo shaderStages[2]{
-  {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-    .pNext = nullptr,
-    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-    .module = vertexShader,
-    .pSpecializationInfo = nullptr,
-    .flags = 0,
-    .pName = "main",
-  },
-  {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-    .pNext = nullptr,
-    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-    .module = fragmentShader,
-    .pSpecializationInfo = nullptr,
-    .flags = 0,
-    .pName = "main",
-  }};
+    {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = aVertexShader,
+      .pSpecializationInfo = nullptr,
+      .flags = 0,
+      .pName = "main",
+    },
+    {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = aFragmentShader,
+      .pSpecializationInfo = nullptr,
+      .flags = 0,
+      .pName = "main",
+    }
+  };
 
   VkViewport viewports{
     .minDepth = 0.0f,
@@ -748,7 +697,7 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
   };
 
   CALL_VK(vkCreatePipelineCache(mDeviceInfo.device, &pipelineCacheInfo, nullptr,
-                                      &mGfxPipeline.cache));
+                                      &aSurf.mGfxPipeline.cache));
 
   // Create the pipeline
   VkGraphicsPipelineCreateInfo pipelineCreateInfo{
@@ -766,7 +715,7 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
     .pDepthStencilState = nullptr,
     .pColorBlendState = &colorBlendInfo,
     .pDynamicState = &dynamicStateInfo,
-    .layout = mGfxPipeline.layout,
+    .layout = aSurf.mGfxPipeline.layout,
     .renderPass = mRenderInfo.renderPass,
     .subpass = 0,
     .basePipelineHandle = VK_NULL_HANDLE,
@@ -774,18 +723,152 @@ VkResult VulkanRenderer::CreateGraphicsPipeline() {
   };
 
   VkResult pipelineResult = vkCreateGraphicsPipelines(
-                              mDeviceInfo.device, mGfxPipeline.cache, 1, &pipelineCreateInfo, nullptr,
-                              &mGfxPipeline.pipeline);
-
-  // We don't need the shaders anymore, we can release their memory
-  vkDestroyShaderModule(mDeviceInfo.device, vertexShader, nullptr);
-  vkDestroyShaderModule(mDeviceInfo.device, fragmentShader, nullptr);
+                              mDeviceInfo.device, aSurf.mGfxPipeline.cache, 1, &pipelineCreateInfo, nullptr,
+                              &aSurf.mGfxPipeline.pipeline);
 
   return pipelineResult;
 }
 
+void VulkanRenderer::CreateCommandBuffer() {
+  // Create a pool of command buffers to allocate command buffer from
+  VkCommandPoolCreateInfo cmdPoolCreateInfo{
+          .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+          .pNext = nullptr,
+          .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+          .queueFamilyIndex = mDeviceInfo.queueFamilyIndex,
+  };
+  CALL_VK(vkCreateCommandPool(mDeviceInfo.device, &cmdPoolCreateInfo, nullptr,
+                              &mRenderInfo.cmdPool));
+
+  // Record a command buffer that just clear the screen
+  // 1 command buffer draw in 1 framebuffer
+  // In our case we need 2 command as we have 2 framebuffer
+  mRenderInfo.cmdBufferLen = mSwapchain.swapchainLength;
+  mRenderInfo.cmdBuffer = new VkCommandBuffer[mSwapchain.swapchainLength];
+  VkCommandBufferAllocateInfo cmdBufferCreateInfo{
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+          .pNext = nullptr,
+          .commandPool = mRenderInfo.cmdPool,
+          .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+          .commandBufferCount = mRenderInfo.cmdBufferLen
+  };
+  CALL_VK(vkAllocateCommandBuffers(mDeviceInfo.device, &cmdBufferCreateInfo,
+                                   mRenderInfo.cmdBuffer));
+
+  for (int bufferIndex = 0; bufferIndex < mSwapchain.swapchainLength;
+       bufferIndex++) {
+    // We start by creating and declare the "beginning" our command buffer
+    VkCommandBufferBeginInfo cmdBufferBeginInfo{
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .pInheritanceInfo = nullptr
+    };
+    CALL_VK(vkBeginCommandBuffer(mRenderInfo.cmdBuffer[bufferIndex],
+                                 &cmdBufferBeginInfo));
+    // transition the display image to color attachment layout
+    SetImageLayout(mRenderInfo.cmdBuffer[bufferIndex],
+                   mSwapchain.displayImages[bufferIndex],
+                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+    // Now we start a renderpass. Any draw command has to be recorded in a
+    // renderpass
+    VkClearValue clearVals{
+            .color.float32[0] = 0.0f,
+            .color.float32[1] = 1.0f,
+            .color.float32[2] = 0.0f,
+            .color.float32[3] = 1.0f,
+    };
+
+    VkRenderPassBeginInfo renderPassBeginInfo{
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .pNext = nullptr,
+            .renderPass = mRenderInfo.renderPass,
+            .framebuffer = mSwapchain.framebuffers[bufferIndex],
+            .renderArea = {
+                    .offset = {
+                            .x = 0, .y = 0,
+                    },
+                    .extent = mSwapchain.displaySize
+            },
+            .clearValueCount = 1,
+            .pClearValues = &clearVals
+    };
+    vkCmdBeginRenderPass(mRenderInfo.cmdBuffer[bufferIndex], &renderPassBeginInfo,
+                         VK_SUBPASS_CONTENTS_INLINE);
+
+//    vkCmdBindVertexBuffers(mRenderInfo.cmdBuffer[bufferIndex], 0, 1,
+//                           &mBuffer.vertexBuf, &offset);
+    for (const auto& surf : mSurfaces) {
+      // Bind what is necessary to the command buffer
+      vkCmdBindPipeline(mRenderInfo.cmdBuffer[bufferIndex],
+                        VK_PIPELINE_BIND_POINT_GRAPHICS, surf.mGfxPipeline.pipeline);
+
+      VkDeviceSize offset = 0;
+      vkCmdBindVertexBuffers(mRenderInfo.cmdBuffer[bufferIndex], 0, 1,
+              &surf.mBuffer.vertexBuf, &offset);
+
+      if (surf.mBuffer.indexBuf) {
+        vkCmdBindIndexBuffer(mRenderInfo.cmdBuffer[bufferIndex],
+                surf.mBuffer.indexBuf, 0, VK_INDEX_TYPE_UINT16);
+      }
+
+      if (surf.mBuffer.indexBuf) {
+        // Draw Triangle with indexed
+        // commandBuffer, indexCount, instanceCount, firstVertex, vertexOffset, firstInstance
+        vkCmdDrawIndexed(mRenderInfo.cmdBuffer[bufferIndex],
+                static_cast<uint32_t>(surf.mIndexData.size()), 1, 0, 0, 0);
+      } else {
+        // Draw Triangle
+        // commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance
+        vkCmdDraw(mRenderInfo.cmdBuffer[bufferIndex],
+                  surf.mVertexCount, surf.mInstanceCount, surf.mFirstVertex, surf.mFirstInstance);
+      }
+    }
+
+    vkCmdEndRenderPass(mRenderInfo.cmdBuffer[bufferIndex]);
+    // transition back to swapchain image to PRESENT_SRC_KHR
+    SetImageLayout(mRenderInfo.cmdBuffer[bufferIndex],
+                   mSwapchain.displayImages[bufferIndex],
+                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+    CALL_VK(vkEndCommandBuffer(mRenderInfo.cmdBuffer[bufferIndex]));
+  }
+
+  // We need to create a fence to be able, in the main loop, to wait for our
+  // draw command(s) to finish before swapping the framebuffers
+  VkFenceCreateInfo fenceCreateInfo{
+          .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+          .pNext = nullptr,
+          .flags = 0,
+  };
+  CALL_VK(vkCreateFence(mDeviceInfo.device, &fenceCreateInfo,
+                        nullptr, &mRenderInfo.fence));
+
+  // We need to create a semaphore to be able to wait, in the main loop, for our
+  // framebuffer to be available for us before drawing.
+  VkSemaphoreCreateInfo semaphoreCreateInfo{
+          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+          .pNext = nullptr,
+          .flags = 0
+  };
+  CALL_VK(vkCreateSemaphore(mDeviceInfo.device, &semaphoreCreateInfo, nullptr,
+                            &mRenderInfo.semaphore));
+
+ // mInitialized = true;
+}
+
 bool VulkanRenderer::IsReady() {
   return mInitialized;
+}
+
+void VulkanRenderer::DestroyShaderModule(VkShaderModule aShader) {
+  vkDestroyShaderModule(mDeviceInfo.device, aShader, nullptr);
 }
 
 void VulkanRenderer::DeleteSwapChain() {
@@ -798,14 +881,25 @@ void VulkanRenderer::DeleteSwapChain() {
 }
 
 void VulkanRenderer::DeleteGraphicsPipeline() {
-  if (mGfxPipeline.pipeline == VK_NULL_HANDLE) return;
-  vkDestroyPipeline(mDeviceInfo.device, mGfxPipeline.pipeline, nullptr);
-  vkDestroyPipelineCache(mDeviceInfo.device, mGfxPipeline.cache, nullptr);
-  vkDestroyPipelineLayout(mDeviceInfo.device, mGfxPipeline.layout, nullptr);
+  for (auto& surf : mSurfaces) {
+    if (surf.mGfxPipeline.pipeline == VK_NULL_HANDLE) {
+      continue;
+    }
+    vkDestroyPipeline(mDeviceInfo.device, surf.mGfxPipeline.pipeline, nullptr);
+    vkDestroyPipelineCache(mDeviceInfo.device, surf.mGfxPipeline.cache, nullptr);
+    vkDestroyPipelineLayout(mDeviceInfo.device, surf.mGfxPipeline.layout, nullptr);
+  }
 }
 
 void VulkanRenderer::DeleteBuffers() {
-  vkDestroyBuffer(mDeviceInfo.device, mBuffer.vertexBuf, nullptr);
+ // vkDestroyBuffer(mDeviceInfo.device, mBuffer.vertexBuf, nullptr);
+  for (const auto& surf : mSurfaces) {
+    vkDestroyBuffer(mDeviceInfo.device, surf.mBuffer.vertexBuf, nullptr);
+
+    if (surf.mBuffer.indexBuf) {
+      vkDestroyBuffer(mDeviceInfo.device, surf.mBuffer.indexBuf, nullptr);
+    }
+  }
 }
 
 void VulkanRenderer::Terminate() {
@@ -848,7 +942,7 @@ void VulkanRenderer::RenderFrame() {
   CALL_VK(
           vkWaitForFences(mDeviceInfo.device, 1, &mRenderInfo.fence, VK_TRUE, 100000000));
 
-  LOG_I(gAppName.c_str(), "Rendering frames......");
+//  LOG_I(gAppName.c_str(), "Rendering frames......");
 
   VkResult result;
   VkPresentInfoKHR presentInfo{
@@ -863,3 +957,43 @@ void VulkanRenderer::RenderFrame() {
   };
   vkQueuePresentKHR(mDeviceInfo.queue, &presentInfo);
 }
+
+// TODO: should we use shared_ptr?
+bool VulkanRenderer::AddSurface(const RenderSurface& aSurf) {
+  mSurfaces.push_back(aSurf);
+  return true;
+}
+
+// TODO: Why implement it?
+//bool VulkanRenderer::AddObject(const Object& aObj) {
+//  mObjects.push_back(aObj);
+//
+////  if (!mInitialized) {
+////    LOG_W(gAppName.c_str(), "Must call VulkanRenderer::Init before add objects.");
+////    return false;
+////  }
+//
+//  auto it = aObj.mComponents.find(MATERIAL_COMPONENT);
+//  if  (it != aObj.mComponents.end()) {
+//    std::shared_ptr<Component> comp = it->second;
+//    Material* mtr = (Material*)comp.get();
+//
+//    if (mtr) {
+//      std::string vsName = mtr->mVertexShader;
+//      std::string fsName = mtr->mFragShader;
+//
+//      VkShaderModule vertexShader, fragmentShader;
+//      loadShaderFromFile(vsName.c_str(), &vertexShader, VERTEX_SHADER);
+//      loadShaderFromFile(fsName.c_str(), &fragmentShader, FRAGMENT_SHADER);
+//
+//      VkResult result = CreateGraphicsPipeline(vertexShader, fragmentShader);
+//      assert(result == VK_SUCCESS);
+//      vkDestroyShaderModule(mDeviceInfo.device, vertexShader, nullptr);
+//      vkDestroyShaderModule(mDeviceInfo.device, fragmentShader, nullptr);
+//    }
+//  }
+//
+//  CreateCommandBuffer();
+//
+//  return true;
+//}

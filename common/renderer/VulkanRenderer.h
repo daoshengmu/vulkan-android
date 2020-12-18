@@ -7,7 +7,9 @@
 
 #include <string>
 #include <vector>
+#include <vector>
 #include "vulkan_wrapper.h"
+#include "RenderSurface.h"
 
 struct android_app;
 class ANativeWindow;
@@ -16,10 +18,21 @@ class VkApplicationInfo;
 class VulkanRenderer {
 public:
   VulkanRenderer() : mAppContext(nullptr), mInitialized(false) {}
-  bool Init(android_app* app, std::string aAppName);
+  bool Init(android_app* app, const std::string& aAppName);
   bool IsReady();
   void Terminate();
   void RenderFrame();
+//  bool AddObject(const Object& aObj);
+  bool AddSurface(const RenderSurface& aSurf);
+  void CreateVertexBuffer(const std::vector<float>& aVertexData, RenderSurface& aSurf);
+  void CreateIndexBuffer(const std::vector<uint16_t>& aIndexData, RenderSurface& aSurf);
+  void CreateCommandBuffer();
+  VkResult CreateGraphicsPipeline(VkShaderModule aVertexShader,
+                                  VkShaderModule aFragmentShader,
+                                  RenderSurface& aSurf);
+  VkResult LoadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
+                              ShaderType type);
+  void DestroyShaderModule(VkShaderModule aShader);
 
 private:
   struct VulkanDeviceInfo {
@@ -45,9 +58,10 @@ private:
     std::vector<VkFramebuffer> framebuffers;
   };
 
-  struct VulkanBufferInfo {
-    VkBuffer vertexBuf;
-  };
+  // TODO: remove it.
+//  struct VulkanBufferInfo {
+//    VkBuffer vertexBuf;
+//  };
 
   struct VulkanRenderInfo {
     VkRenderPass renderPass;
@@ -58,13 +72,13 @@ private:
     VkFence fence;
   };
 
-  struct VulkanGfxPipelineInfo {
-    VkPipelineLayout layout;
-    VkPipelineCache cache;
-    VkPipeline pipeline;
-  };
-
-  enum ShaderType { VERTEX_SHADER, FRAGMENT_SHADER };
+//  struct VulkanGfxPipelineInfo {
+//    VkPipelineLayout layout;
+//    VkPipelineCache cache;
+//    VkPipeline pipeline;
+//  };
+//
+//  enum ShaderType { VERTEX_SHADER, FRAGMENT_SHADER };
 
   bool MapMemoryTypeToIndex(uint32_t typeBits, VkFlags requirements_mask,
                             uint32_t* typeIndex);
@@ -73,10 +87,8 @@ private:
   void CreateSwapChain();
   void CreateFrameBuffers(VkRenderPass& renderPass,
                           VkImageView depthView = VK_NULL_HANDLE);
-  void CreateBuffers();
-  VkResult CreateGraphicsPipeline();
-  VkResult loadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
-                              ShaderType type);
+//  void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+//                    VkBuffer& buffer, VkDeviceMemory& bufferMemory);
   void SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
                       VkImageLayout oldImageLayout, VkImageLayout newImageLayout,
                       VkPipelineStageFlags srcStages,
@@ -89,9 +101,12 @@ private:
   VulkanDeviceInfo mDeviceInfo;
   VulkanSwapchainInfo mSwapchain;
   VulkanRenderInfo mRenderInfo;
-  VulkanBufferInfo mBuffer;
-  VulkanGfxPipelineInfo mGfxPipeline;
+ // VulkanBufferInfo mBuffer;
+//  VulkanGfxPipelineInfo mGfxPipeline;
 
+//  std::vector<Object> mObjects;
+  // TODO: should we use shared_ptr?
+  std::vector<RenderSurface> mSurfaces;
   bool mInitialized;
 };
 

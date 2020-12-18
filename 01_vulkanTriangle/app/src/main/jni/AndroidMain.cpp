@@ -16,6 +16,8 @@ void CmdHandler(android_app* app, int32_t cmd) {
         // The window is being hidden or closed, clean it up.
         TerminateVulkan();
         break;
+      case APP_CMD_START:
+        break;
       default:
         __android_log_print(ANDROID_LOG_INFO, "Vulkan Tutorials",
                             "event not handled: %d", cmd);
