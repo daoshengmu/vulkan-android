@@ -1,5 +1,16 @@
 # vulkan-android
-The purpose of this project is in order to provide step-by-step examples of learning Vulkan. The current examples work well on Android phones which are capable for running Vulkan. They have been confirmed running well by using AndroidStudio. (Maybe I would make they are able to be run on Mac OS in the near future.)
+The purpose of this project is in order to provide step-by-step examples of learning Vulkan. The current examples work well on Android phones which are capable for Vulkan. They have been confirmed running well in AndroidStudio. (Maybe I would make they also be able to run on Mac OS platform in the near future.)
+
+## Setup instructions
+*Clone.*
+```
+git clone git@github.com:daoshengmu/vulkan-android.git
+cd vulkan-android
+```
+*Fetch Git submodules.*
+```
+git submodule update --init --recursive
+```
 
 ## Examples
 ### Basic
