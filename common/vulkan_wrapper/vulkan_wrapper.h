@@ -224,13 +224,15 @@ extern PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR;
 extern PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR vkGetPhysicalDeviceWin32PresentationSupportKHR;
 #endif
 
-#ifdef USE_DEBUG_EXTENTIONS
-#include <vulkan/vk_sdk_platform.h>
+#ifdef VK_EXT_debug_report
+//#include <vulkan/vk_sdk_platform.h>
 // VK_EXT_debug_report
 extern PFN_vkCreateDebugReportCallbackEXT vkCreateDebugReportCallbackEXT;
-extern PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 extern PFN_vkDebugReportMessageEXT vkDebugReportMessageEXT;
-#endif
+extern PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 
+void VulkanLoadInstance(VkInstance aInstance);
+
+#endif
 
 #endif // VULKAN_WRAPPER_H

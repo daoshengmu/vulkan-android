@@ -13,7 +13,7 @@
 #include "VulkanRenderer.h"
 #include "Object.h"
 
-static const char* kTAG = "01-Vulkan-Triangle";
+static const char* kTAG = "02-Vulkan-Cube-IndexBuffer";
 
 VulkanRenderer gRenderer;
 
@@ -26,76 +26,36 @@ bool InitVulkan(android_app* app) {
   // create vertex / index buffer
   const std::vector<float> vertexData = {
       // Front face
-      -0.5, -0.5, 0.5,
-      0.5, -0.5, 0.5,
-      0.5, 0.5, 0.5,
-      -0.5, 0.5, 0.5,
+      -0.5, -0.5, 0.0,
+      0.5, -0.5, 0.0,
+      0.5, 0.5, 0.0,
+      -0.5, 0.5, 0.0,
 
       // Back face
       -0.5, -0.5, 1.0,
       -0.5, 0.5, 1.0,
       0.5, 0.5, 1.0,
       0.5, -0.5, 1.0,
-
-
-//    // Front face
-//    -1.0, -1.0, 1.0,
-//    1.0, -1.0, 1.0,
-//    1.0, 1.0, 1.0,
-//    -1.0, 1.0, 1.0,
-//
-//    // Back face
-//    -1.0, -1.0, -1.0,
-//    -1.0, 1.0, -1.0,
-//    1.0, 1.0, -1.0,
-//    1.0, -1.0, -1.0,
-
-    // Top face
-//    -1.0, 1.0, -1.0,
-//    -1.0, 1.0, 1.0,
-//    1.0, 1.0, 1.0,
-//    1.0, 1.0, -1.0,
-//
-//    // Bottom face
-//    -1.0, -1.0, -1.0,
-//    1.0, -1.0, -1.0,
-//    1.0, -1.0, 1.0,
-//    -1.0, -1.0, 1.0,
-//
-//    // Right face
-//    1.0, -1.0, -1.0,
-//    1.0, 1.0, -1.0,
-//    1.0, 1.0, 1.0,
-//    1.0, -1.0, 1.0,
-//
-//    // Left face
-//    -1.0, -1.0, -1.0,
-//    -1.0, -1.0, 1.0,
-//    -1.0, 1.0, 1.0,
-//    -1.0, 1.0, -1.0,
   };
 
   const std::vector<uint16_t> indexData = {
-      0, 1, 2,    0, 2, 3,
-      4, 5, 6,    4, 6, 7,
-      5, 3, 2,    5, 2, 6,
-      4, 7, 0,    4, 1, 0,
-      7, 4, 6,    7, 2, 1,
-      4, 0, 4,    4, 3, 5
+      0, 1, 2,  0, 2, 3,
+      4, 5, 6,  4, 6, 7,
+      5, 3, 2,  5, 2, 6,
+      4, 7, 0,  7, 1, 0,
+      7, 6, 2,  7, 2, 1,
+      0, 5, 4,  0, 3, 5
   };
 
-  RenderSurface surf;
+  auto surf = std::make_shared<RenderSurface>();
   gRenderer.CreateVertexBuffer(vertexData, surf);
   gRenderer.CreateIndexBuffer(indexData, surf);
+  gRenderer.CreateGraphicsPipeline("shaders/tri.vert.spv",
+          "shaders/tri.frag.spv", surf);
 
-  VkShaderModule vertexShader, fragmentShader;
-  gRenderer.LoadShaderFromFile("shaders/tri.vert.spv", &vertexShader, VERTEX_SHADER);
-  gRenderer.LoadShaderFromFile("shaders/tri.frag.spv", &fragmentShader, FRAGMENT_SHADER);
-  gRenderer.CreateGraphicsPipeline(vertexShader, fragmentShader, surf);
-
-  surf.mVertexCount = 8;
-  surf.mInstanceCount = 12;
-  surf.mIndexCount = 36;
+  surf->mVertexCount = 8;
+  surf->mInstanceCount = 12;
+  surf->mIndexCount = 36;
 
   gRenderer.AddSurface(surf);
   gRenderer.CreateCommandBuffer();

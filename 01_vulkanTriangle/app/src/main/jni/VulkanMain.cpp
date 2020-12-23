@@ -26,24 +26,18 @@ bool InitVulkan(android_app* app) {
     1.0f, 1.0f, 0.0f,
     0.0f, -1.0f, 0.0f,
   };
-  RenderSurface surf;
-  gRenderer.CreateVertexBuffer(vertexData, surf);
 
   // 1. instantiate a surface
+  auto surf = std::make_shared<RenderSurface>();
   // 2. create vertex / index buffer
+  gRenderer.CreateVertexBuffer(vertexData, surf);
+
   // 3. create shader
-  VkShaderModule vertexShader, fragmentShader;
-  gRenderer.LoadShaderFromFile("shaders/tri.vert.spv", &vertexShader, VERTEX_SHADER);
-  gRenderer.LoadShaderFromFile("shaders/tri.frag.spv", &fragmentShader, FRAGMENT_SHADER);
-  gRenderer.CreateGraphicsPipeline(vertexShader, fragmentShader, surf);
-  // We don't need the shaders anymore, we can release their memory
-  gRenderer.DestroyShaderModule(vertexShader);
-  gRenderer.DestroyShaderModule(fragmentShader);
+  gRenderer.CreateGraphicsPipeline("shaders/tri.vert.spv",
+          "shaders/tri.frag.spv", surf);
 
-  surf.mVertexCount = 3;
-  surf.mInstanceCount = 1;
-
-  // 4. create textures
+  surf->mVertexCount = 3;
+  surf->mInstanceCount = 1;
 
   gRenderer.AddSurface(surf);
 

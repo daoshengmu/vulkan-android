@@ -1,0 +1,3 @@
+[submodule "gfx-math"]
+	path = gfx-math
+	url = git@github.com:daoshengmu/gfx-math.git

@@ -2,8 +2,8 @@
 // Created by Daosheng Mu on 8/9/20.
 //
 
-#ifndef VULKANCUBEINDEXBUFFER_MATERIAL_H
-#define VULKANCUBEINDEXBUFFER_MATERIAL_H
+#ifndef VULKAN_MATERIAL_H
+#define VULKAN_MATERIAL_H
 
 #include <string>
 #include "Component.h"
@@ -19,4 +19,4 @@ public:
 };
 
 
-#endif //VULKANCUBEINDEXBUFFER_MATERIAL_H
+#endif //VULKAN_MATERIAL_H

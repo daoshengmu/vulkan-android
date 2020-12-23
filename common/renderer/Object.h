@@ -2,8 +2,8 @@
 // Created by Daosheng Mu on 8/9/20.
 //
 
-#ifndef VULKANANDROID_OBJECT_H
-#define VULKANANDROID_OBJECT_H
+#ifndef VULKAN_OBJECT_H
+#define VULKAN_OBJECT_H
 
 #include <memory>
 #include <unordered_map>
@@ -19,4 +19,4 @@ public:
 };
 
 
-#endif //VULKANANDROID_OBJECT_H
+#endif //VULKAN_OBJECT_H

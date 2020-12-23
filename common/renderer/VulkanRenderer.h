@@ -2,41 +2,41 @@
 // Created by Daosheng Mu on 8/8/20.
 //
 
-#ifndef VULKANTRIANGLE_VULKANRENDERER_H
-#define VULKANTRIANGLE_VULKANRENDERER_H
+#ifndef VULKAN_RENDERER_H
+#define VULKAN_RENDERER_H
 
 #include <string>
 #include <vector>
-#include <vector>
+#include <memory>
 #include "vulkan_wrapper.h"
 #include "RenderSurface.h"
+#include "Matrix4x4.h"
 
 struct android_app;
 class ANativeWindow;
 class VkApplicationInfo;
 
+using namespace gfx_math;
+
 class VulkanRenderer {
 public:
   VulkanRenderer() : mAppContext(nullptr), mInitialized(false) {}
   bool Init(android_app* app, const std::string& aAppName);
+ // void SetupViewport(int aX, int aY, int aWidth, int aHeight, float aNear, float aFar);
   bool IsReady();
   void Terminate();
   void RenderFrame();
-//  bool AddObject(const Object& aObj);
-  bool AddSurface(const RenderSurface& aSurf);
-  void CreateVertexBuffer(const std::vector<float>& aVertexData, RenderSurface& aSurf);
-  void CreateIndexBuffer(const std::vector<uint16_t>& aIndexData, RenderSurface& aSurf);
+  bool AddSurface(std::shared_ptr<RenderSurface> aSurf);
+  void CreateVertexBuffer(const std::vector<float>& aVertexData, std::shared_ptr<RenderSurface> aSurf);
+  void CreateIndexBuffer(const std::vector<uint16_t>& aIndexData, std::shared_ptr<RenderSurface> aSurf);
+  void CreateUniformBuffer(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf);
   void CreateCommandBuffer();
-  VkResult CreateGraphicsPipeline(VkShaderModule aVertexShader,
-                                  VkShaderModule aFragmentShader,
-                                  RenderSurface& aSurf);
-  VkResult LoadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
-                              ShaderType type);
-  void DestroyShaderModule(VkShaderModule aShader);
+  VkResult CreateGraphicsPipeline(const char* aVSPath, const char* aFSPath, std::shared_ptr<RenderSurface> aSurf);
 
 private:
   struct VulkanDeviceInfo {
-    VkInstance instance;
+    VkDebugReportCallbackEXT debugReportCallback = VK_NULL_HANDLE;
+    VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice gpuDevice;
     VkDevice device;
     uint32_t queueFamilyIndex;
@@ -58,11 +58,6 @@ private:
     std::vector<VkFramebuffer> framebuffers;
   };
 
-  // TODO: remove it.
-//  struct VulkanBufferInfo {
-//    VkBuffer vertexBuf;
-//  };
-
   struct VulkanRenderInfo {
     VkRenderPass renderPass;
     VkCommandPool cmdPool;
@@ -77,8 +72,6 @@ private:
 //    VkPipelineCache cache;
 //    VkPipeline pipeline;
 //  };
-//
-//  enum ShaderType { VERTEX_SHADER, FRAGMENT_SHADER };
 
   bool MapMemoryTypeToIndex(uint32_t typeBits, VkFlags requirements_mask,
                             uint32_t* typeIndex);
@@ -87,28 +80,33 @@ private:
   void CreateSwapChain();
   void CreateFrameBuffers(VkRenderPass& renderPass,
                           VkImageView depthView = VK_NULL_HANDLE);
-//  void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
-//                    VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+  VkResult LoadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
+                              ShaderType type);
   void SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
                       VkImageLayout oldImageLayout, VkImageLayout newImageLayout,
                       VkPipelineStageFlags srcStages,
                       VkPipelineStageFlags destStages);
+  void UpdateUniformBuffer(int aImageIndex);
   void DeleteSwapChain();
   void DeleteGraphicsPipeline();
   void DeleteBuffers();
+  void DeleteDescriptors();
+  void DestroyShaderModule(VkShaderModule aShader);
 
   android_app* mAppContext;
   VulkanDeviceInfo mDeviceInfo;
   VulkanSwapchainInfo mSwapchain;
   VulkanRenderInfo mRenderInfo;
- // VulkanBufferInfo mBuffer;
-//  VulkanGfxPipelineInfo mGfxPipeline;
 
-//  std::vector<Object> mObjects;
-  // TODO: should we use shared_ptr?
-  std::vector<RenderSurface> mSurfaces;
+  std::vector<std::shared_ptr<RenderSurface>> mSurfaces;
+  Matrix4x4f mViewMatrix;
+  Matrix4x4f mProjMatrix;
+  //Rect viewPort;
+//  float viewNear;
+//  float viewFar;
+
   bool mInitialized;
 };
 
 
-#endif //VULKANTRIANGLE_VULKANRENDERER_H
+#endif //VULKAN_RENDERER_H

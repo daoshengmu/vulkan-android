@@ -2,10 +2,12 @@
 // Created by Daosheng Mu on 12/13/20.
 //
 
-#ifndef VULKANTRIANGLE_RENDERSURFACE_H
-#define VULKANTRIANGLE_RENDERSURFACE_H
+#ifndef VULKANANDROID_RENDERSURFACE_H
+#define VULKANANDROID_RENDERSURFACE_H
 
-//#include "VulkanRenderer.h"
+#include "Matrix4x4.h"
+
+using namespace gfx_math;
 
 enum ShaderType { VERTEX_SHADER, FRAGMENT_SHADER };
 
@@ -16,13 +18,14 @@ public:
   int mInstanceCount = 0;
   int mFirstVertex = 0;
   int mFirstInstance = 0;
-
   int mIndexCount = 0;
+  Matrix4x4f  mTransformMatrix;
+  int mUBOSize = 0;
 
 private:
   struct VulkanBufferInfo {
     VkBuffer vertexBuf;
-    VkBuffer indexBuf = 0;
+    VkBuffer indexBuf = VK_NULL_HANDLE;
   };
 
   struct VulkanGfxPipelineInfo {
@@ -36,11 +39,13 @@ private:
   std::vector<uint16_t> mIndexData;
   VulkanBufferInfo mBuffer;
   VulkanGfxPipelineInfo mGfxPipeline;
+  VkDescriptorSetLayout mDescriptorSetLayout = VK_NULL_HANDLE; // TODO: clean it up
+  VkDescriptorPool mDescriptorPool; // TODO: clean it up
+  std::vector<VkDescriptorSet> mDescriptorSets; // TODO: clean it up
+  std::vector<VkBuffer> mUniformBuffers;
+  std::vector<VkDeviceMemory> mUniformBuffersMemory;
 
   // material
-  //  shader
- // VkShaderModule mVertexShader;
- // VkShaderModule mFragShader;
 
   //  texture
 
@@ -49,4 +54,4 @@ private:
   friend class VulkanRenderer;
 };
 
-#endif //VULKANTRIANGLE_RENDERSURFACE_H
+#endif //VULKAN_RENDERSURFACE_H
