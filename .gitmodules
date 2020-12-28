@@ -1,3 +1,6 @@
-[submodule "gfx-math"]
-	path = gfx-math
+[submodule "third_party/KTX-Software"]
+	path = third_party/KTX-Software
+	url = git@github.com:KhronosGroup/KTX-Software.git
+[submodule "third_party/gfx-math"]
+	path = third_party/gfx-math
 	url = git@github.com:daoshengmu/gfx-math.git
