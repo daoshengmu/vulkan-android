@@ -9,7 +9,7 @@
 #include <MathUtils.h>
 
 #include "vulkan_wrapper.h"
-#include "utils.h"
+#include "Utils.h"
 #include "VulkanRenderer.h"
 #include "Matrix4x4.h"
 
@@ -54,20 +54,24 @@ bool InitVulkan(android_app* app) {
     Matrix4x4f mvpMtx;
   };
 
+  gSurf->mVertexCount = 8;
+  gSurf->mInstanceCount = 12;
+  gSurf->mIndexCount = 36;
+  gSurf->mItemSize = 3;
+
   gRenderer.CreateVertexBuffer(vertexData, gSurf);
   gRenderer.CreateIndexBuffer(indexData, gSurf);
   gRenderer.CreateUniformBuffer(sizeof(UniformBufferObject), gSurf);
 
+  // CreateDescriptorSetLayout needs to be after CreateTextureFromFile and CreateUniformBuffer
+  gRenderer.CreateDescriptorSetLayout(gSurf);
   gRenderer.CreateGraphicsPipeline("shaders/uniform.vert.spv",
                                    "shaders/uniform.frag.spv", gSurf);
-
-  gSurf->mVertexCount = 8;
-  gSurf->mInstanceCount = 12;
-  gSurf->mIndexCount = 36;
+  gRenderer.CreateDescriptorSet(sizeof(UniformBufferObject), gSurf);
   gSurf->mTransformMatrix.Translate(0, 0, -10);
 
   gRenderer.AddSurface(gSurf);
-  gRenderer.CreateCommandBuffer();
+  gRenderer.ConstructRenderPass();
 
   return true;
 }

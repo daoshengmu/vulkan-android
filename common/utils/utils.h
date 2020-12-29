@@ -2,8 +2,8 @@
 // Created by Daosheng Mu on 8/8/20.
 //
 
-#ifndef VULKAN_COMMONUTILS_UTILS_H
-#define VULKAN_COMMONUTILS_UTILS_H
+#ifndef VULKANANDROID_COMMONUTILS_UTILS_H
+#define VULKANANDROID_COMMONUTILS_UTILS_H
 
 #include <android/log.h>
 
@@ -15,4 +15,4 @@
   ((void)__android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__))
 
 
-#endif //VULKAN_COMMONUTILS_UTILS_H
+#endif //VULKANANDROID_COMMONUTILS_UTILS_H

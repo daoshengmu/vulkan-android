@@ -4,7 +4,6 @@
 
 #include "Cube.h"
 
-//bool Cube::mInited = false;
 
 //(POS 3, COLOR 4, NORMAL 3, UV 2)
 std::vector<float> Cube::mCubeVertexData = {
@@ -55,9 +54,6 @@ std::vector<uint16_t> Cube::mCubeIndexData = {
 };
 
 Cube::Cube() {
-//  if (!mInited) {
-//    mInited = true;
-//  }
   mVertexCount = 24;
   mIndexCount = 36;
   mInstanceCount = 12;

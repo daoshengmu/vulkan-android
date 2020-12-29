@@ -9,9 +9,8 @@
 #include <component/Material.h>
 
 #include "vulkan_wrapper.h"
-#include "utils.h"
+#include "Utils.h"
 #include "VulkanRenderer.h"
-#include "Object.h"
 
 static const char* kTAG = "02-Vulkan-Cube-IndexBuffer";
 
@@ -48,17 +47,18 @@ bool InitVulkan(android_app* app) {
   };
 
   auto surf = std::make_shared<RenderSurface>();
+  surf->mVertexCount = 8;
+  surf->mInstanceCount = 12;
+  surf->mIndexCount = 36;
+  surf->mItemSize = 3;
+
   gRenderer.CreateVertexBuffer(vertexData, surf);
   gRenderer.CreateIndexBuffer(indexData, surf);
   gRenderer.CreateGraphicsPipeline("shaders/tri.vert.spv",
           "shaders/tri.frag.spv", surf);
 
-  surf->mVertexCount = 8;
-  surf->mInstanceCount = 12;
-  surf->mIndexCount = 36;
-
   gRenderer.AddSurface(surf);
-  gRenderer.CreateCommandBuffer();
+  gRenderer.ConstructRenderPass();
 
   return true;
 }

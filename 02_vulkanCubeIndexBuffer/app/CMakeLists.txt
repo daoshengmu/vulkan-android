@@ -16,7 +16,8 @@ add_library(vkexamples SHARED
         ${SRC_JNI_DIR}/AndroidMain.cpp
         ${SRC_JNI_DIR}/VulkanMain.cpp
         ${WRAPPER_DIR}/vulkan_wrapper.cpp
-        ${SRC_RENDERER_DIR}/VulkanRenderer.cpp)
+        ${SRC_RENDERER_DIR}/VulkanRenderer.cpp
+        ${UTILS_DIR}/Platform.cpp)
 
 include_directories(${WRAPPER_DIR}
                     ${UTILS_DIR}
