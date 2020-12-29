@@ -9,9 +9,8 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include <component/Material.h>
-#include <ktx.h>
 #include <filesystem>
+#include "ktx.h"
 #include "vulkan_wrapper.h"
 #include "Utils.h"
 #include "Platform.h"
@@ -201,6 +200,7 @@ void VulkanRenderer::CreateVulkanDevice(ANativeWindow* platformWindow,
   vkGetPhysicalDeviceFeatures(mDeviceInfo.gpuDevice, &supportedFeatures);
   SetupPhysicalDeviceFeatures(supportedFeatures);
   vkGetPhysicalDeviceProperties(mDeviceInfo.gpuDevice, &mDeviceInfo.gpuDeviceProperties);
+
   uint32_t queueFamilyIndex;
   for (queueFamilyIndex = 0; queueFamilyIndex < queueFamilyCount;
        queueFamilyIndex++) {
@@ -511,7 +511,7 @@ void VulkanRenderer::UpdateUniformBuffer(int aImageIndex) {
     Matrix4x4f mvpMtx;
     mvpMtx = mProjMatrix * mViewMatrix * surf->mTransformMatrix;
 
-    // TODO: support other uniform data, we currently only has the requirement of MVP mtx.
+    // TODO: support other uniform data, we currently only has the requirement of the MVP mtx.
     memcpy(data, &mvpMtx, surf->mUBOSize);
     vkUnmapMemory(mDeviceInfo.device, surf->mUniformBuffersMemory[aImageIndex]);
   }
@@ -614,122 +614,60 @@ void VulkanRenderer::CreateSyncObjects() {
                             &mRenderInfo.semaphore));
 }
 
-void VulkanRenderer::CreateUniformBuffer(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf) {
-  const int imgSize = mSwapchain.displayImages.size();
-  aSurf->mUniformBuffers.resize(imgSize);
-  aSurf->mUniformBuffersMemory.resize(imgSize);
-  aSurf->mUBOSize = aBufferSize;
-
-  VkBufferCreateInfo createBufferInfo{
-          .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-          .pNext = nullptr,
-          .size = aBufferSize,
-          .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-          .flags = 0,
-          .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-          .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
-          .queueFamilyIndexCount = 1,
+VkCommandBuffer VulkanRenderer::BeginSingleTimeCommands() {
+  VkCommandBufferAllocateInfo allocInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandPool = mRenderInfo.cmdPool,
+    .commandBufferCount = 1,
   };
 
-//  VkMemoryRequirements memReq;
-//  vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf->mBuffer.indexBuf, &memReq);
+  VkCommandBuffer commandBuffer;
+  vkAllocateCommandBuffers(mDeviceInfo.device, &allocInfo, &commandBuffer);
 
-//  VkMemoryAllocateInfo allocInfo{
-//          .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-//          .pNext = nullptr,
-//          .allocationSize = memReq.size,
-//          .memoryTypeIndex = 0,  // Memory type assigned in the next step
-//  };
+  VkCommandBufferBeginInfo beginInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  };
 
-  for (int i = 0; i < imgSize; i++) {
-    CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
-                           &aSurf->mUniformBuffers[i]));
-
-    VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf->mUniformBuffers[i], &memReq);
-
-    VkMemoryAllocateInfo allocInfo{
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = nullptr,
-      .allocationSize = memReq.size,
-      .memoryTypeIndex = 0,  // Memory type assigned in the next step
-    };
-
-    // Assign the proper memory type for that buffer
-    MapMemoryTypeToIndex(memReq.memoryTypeBits,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                         &allocInfo.memoryTypeIndex);
-
-    // Allocate memory for the buffer
-    CALL_VK(vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr,
-                             &aSurf->mUniformBuffersMemory[i]));
-
-    CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aSurf->mUniformBuffers[i],
-                               aSurf->mUniformBuffersMemory[i], 0));
-  }
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+  return commandBuffer;
 }
 
-void VulkanRenderer::CreateVertexBuffer(const std::vector<float>& aVertexData, std::shared_ptr<RenderSurface> aSurf) {
+void VulkanRenderer::EndSingleTimeCommands(VkCommandBuffer aCommandBuffer) {
+  vkEndCommandBuffer(aCommandBuffer);
 
-  aSurf->mVertexData = aVertexData;
-  const size_t size = aVertexData.size() * sizeof(float);
-  // Create a vertex buffer
-  VkBufferCreateInfo createBufferInfo{
-    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .pNext = nullptr,
-    .size = size,
-    .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-    .flags = 0,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
-    .queueFamilyIndexCount = 1,
-  };
+  VkSubmitInfo submitInfo{};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &aCommandBuffer;
 
-  CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
-                         &aSurf->mBuffer.vertexBuf));
+  // TODO: what is the difference between vkWaitForFences and vkQueueWaitIdle?
+  vkQueueSubmit(mDeviceInfo.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(mDeviceInfo.graphicsQueue);
 
-  VkMemoryRequirements memReq;
-  vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf->mBuffer.vertexBuf, &memReq);
-
-  VkMemoryAllocateInfo allocInfo{
-    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-    .pNext = nullptr,
-    .allocationSize = memReq.size,
-    .memoryTypeIndex = 0,  // Memory type assigned in the next step
-  };
-
-  // Assign the proper memory type for that buffer
-  MapMemoryTypeToIndex(memReq.memoryTypeBits,
-                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       &allocInfo.memoryTypeIndex);
-
-  // Allocate memory for the buffer
-  VkDeviceMemory deviceMemory;
-  CALL_VK(vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr, &deviceMemory));
-
-  void* data;
-  CALL_VK(vkMapMemory(mDeviceInfo.device, deviceMemory, 0, allocInfo.allocationSize,
-                            0, &data));
-  memcpy(data, aVertexData.data(), size);
-  vkUnmapMemory(mDeviceInfo.device, deviceMemory);
-
-//  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, mBuffer.vertexBuf, deviceMemory, 0));
-  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aSurf->mBuffer.vertexBuf, deviceMemory, 0));
+  vkFreeCommandBuffers(mDeviceInfo.device, mRenderInfo.cmdPool, 1, &aCommandBuffer);
 }
 
-void VulkanRenderer::CreateIndexBuffer(const std::vector<uint16_t>& aIndexData,
-                                       std::shared_ptr<RenderSurface> aSurf) {
+void VulkanRenderer::CopyBuffer(VkBuffer aSrcBuffer, VkBuffer aDstBuffer, VkDeviceSize aSize) {
+  VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
-  aSurf->mIndexData = aIndexData;
-  const size_t size = aIndexData.size() * sizeof(uint16_t);
+  VkBufferCopy copyRegion{};
+  copyRegion.size = aSize;
+  vkCmdCopyBuffer(commandBuffer, aSrcBuffer, aDstBuffer, 1, &copyRegion);
+
+  EndSingleTimeCommands(commandBuffer);
+}
+
+void VulkanRenderer::CreateBuffer(VkDeviceSize aSize, VkBufferUsageFlags aUsage,
+                                  VkMemoryPropertyFlags aProperties, VkBuffer& aBuffer,
+                                  VkDeviceMemory& aBufferMemory) {
   // Create a index buffer
   VkBufferCreateInfo createBufferInfo{
           .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
           .pNext = nullptr,
-          .size = size,
-          .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          .size = aSize,
+          .usage = aUsage,
           .flags = 0,
           .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
           .pQueueFamilyIndices = &mDeviceInfo.queueFamilyIndex,
@@ -737,10 +675,10 @@ void VulkanRenderer::CreateIndexBuffer(const std::vector<uint16_t>& aIndexData,
   };
 
   CALL_VK(vkCreateBuffer(mDeviceInfo.device, &createBufferInfo, nullptr,
-                         &aSurf->mBuffer.indexBuf));
+                         &aBuffer));
 
   VkMemoryRequirements memReq;
-  vkGetBufferMemoryRequirements(mDeviceInfo.device, aSurf->mBuffer.indexBuf, &memReq);
+  vkGetBufferMemoryRequirements(mDeviceInfo.device, aBuffer, &memReq);
 
   VkMemoryAllocateInfo allocInfo{
           .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -750,25 +688,87 @@ void VulkanRenderer::CreateIndexBuffer(const std::vector<uint16_t>& aIndexData,
   };
 
   // Assign the proper memory type for that buffer
-  MapMemoryTypeToIndex(memReq.memoryTypeBits,
-                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       &allocInfo.memoryTypeIndex);
-
+  MapMemoryTypeToIndex(memReq.memoryTypeBits, aProperties, &allocInfo.memoryTypeIndex);
   // Allocate memory for the buffer
-  VkDeviceMemory deviceMemory;
-  CALL_VK(vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr, &deviceMemory));
-
-  void* data;
-  CALL_VK(vkMapMemory(mDeviceInfo.device, deviceMemory, 0, allocInfo.allocationSize,
-                      0, &data));
-  memcpy(data, aIndexData.data(), size);
-  vkUnmapMemory(mDeviceInfo.device, deviceMemory);
-
-  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aSurf->mBuffer.indexBuf, deviceMemory, 0));
+  CALL_VK(vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr, &aBufferMemory));
+  CALL_VK(vkBindBufferMemory(mDeviceInfo.device, aBuffer, aBufferMemory, 0));
 }
 
-// TODO: maybe it is worth to have a better name.
+void VulkanRenderer::CreateUniformBuffer(VkDeviceSize aBufferSize,
+                                         std::shared_ptr<RenderSurface> aSurf) {
+  const int swapchainCount = mSwapchain.displayImages.size();
+  aSurf->mUniformBuffers.resize(swapchainCount);
+  aSurf->mUniformBuffersMemory.resize(swapchainCount);
+  aSurf->mUBOSize = aBufferSize;
+
+  // Create uniform buffers. We don't need a staging buffer.
+  // We will update the buffers every frame.
+  for (size_t i = 0; i < swapchainCount; i++) {
+    CreateBuffer(aBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            aSurf->mUniformBuffers[i], aSurf->mUniformBuffersMemory[i]);
+  }
+}
+
+void VulkanRenderer::CreateVertexBuffer(const std::vector<float>& aVertexData,
+                                        std::shared_ptr<RenderSurface> aSurf) {
+  aSurf->mVertexData = aVertexData;
+  const size_t bufferSize = aVertexData.size() * sizeof(float);
+  VkBuffer stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+
+  // Create a staging buffer as the src buffer for letting data copy on it.
+  CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+               stagingBuffer, stagingBufferMemory);
+
+  void* data;
+  CALL_VK(vkMapMemory(mDeviceInfo.device, stagingBufferMemory, 0, bufferSize,
+                      0, &data));
+  memcpy(data, aVertexData.data(), bufferSize);
+  vkUnmapMemory(mDeviceInfo.device, stagingBufferMemory);
+
+  // Create a local buffer and let staging buffer copy on it for the GPU optimal usage.
+  // (It might be acceptable just copying data to the local buffer without staging buffer
+  // and it would have penalty on performance.
+  CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, aSurf->mBuffer.vertexBuf, aSurf->mBuffer.vertexBufMemory);
+  CopyBuffer(stagingBuffer, aSurf->mBuffer.vertexBuf, bufferSize);
+
+  vkDestroyBuffer(mDeviceInfo.device, stagingBuffer, nullptr);
+  vkFreeMemory(mDeviceInfo.device, stagingBufferMemory, nullptr);
+}
+
+void VulkanRenderer::CreateIndexBuffer(const std::vector<uint16_t>& aIndexData,
+                                       std::shared_ptr<RenderSurface> aSurf) {
+
+  aSurf->mIndexData = aIndexData;
+  const size_t bufferSize = aIndexData.size() * sizeof(uint16_t);
+  VkBuffer stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+
+  // Create a staging buffer as the src buffer for letting data copy on it.
+  CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+          stagingBuffer, stagingBufferMemory);
+
+  void* data;
+  CALL_VK(vkMapMemory(mDeviceInfo.device, stagingBufferMemory, 0, bufferSize,
+                      0, &data));
+  memcpy(data, aIndexData.data(), bufferSize);
+  vkUnmapMemory(mDeviceInfo.device, stagingBufferMemory);
+
+  // Create a local buffer and let staging buffer copy on it for the GPU optimal usage.
+  // (It might be acceptable just copying data to the local buffer without staging buffer
+  // and it would have penalty on performance.
+  CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, aSurf->mBuffer.indexBuf, aSurf->mBuffer.indexBufMemory);
+  CopyBuffer(stagingBuffer, aSurf->mBuffer.indexBuf, bufferSize);
+
+  vkDestroyBuffer(mDeviceInfo.device, stagingBuffer, nullptr);
+  vkFreeMemory(mDeviceInfo.device, stagingBufferMemory, nullptr);
+}
+
 void VulkanRenderer::CreateDescriptorSetLayout(std::shared_ptr<RenderSurface> aSurf) {
   std::vector<VkDescriptorSetLayoutBinding> layoutBindings;
 
@@ -817,9 +817,8 @@ VkResult VulkanRenderer::CreateGraphicsPipeline(const char* aVSPath,
   LoadShaderFromFile(aVSPath, &vertexShader, VERTEX_SHADER);
   LoadShaderFromFile(aFSPath, &fragmentShader, FRAGMENT_SHADER);
 
-  // TODO: The pipeliine layout is for uniform buffer, we should create
-  //  it by RenderSurface
-  // and make description pool support not just one uniform buffer.
+  // TODO: The pipeline layout works for uniform buffers, we should create
+  //  it in a RenderSurface and make description pool supports not only one uniform buffer.
   // Create pipeline layout
   VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1015,21 +1014,23 @@ VkResult VulkanRenderer::CreateGraphicsPipeline(const char* aVSPath,
 }
 
 void VulkanRenderer::CreateDescriptorPool(std::shared_ptr<RenderSurface> aSurf) {
-  const int imgSize = mSwapchain.displayImages.size();
-  // create descriptior pool
-  // TODO: confirm if surf has no uniform buffer we still need descriptor pool?
-  std::vector<VkDescriptorPoolSize> poolSize = {
-    {
-      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      .descriptorCount = static_cast<uint32_t>(imgSize),
-    }
-  };
+  const int swapchainCount = mSwapchain.displayImages.size();
+  std::vector<VkDescriptorPoolSize> poolSize;
+
+  if (aSurf->mUniformBuffers.size()) {
+    poolSize.push_back(
+      {
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = static_cast<uint32_t>(swapchainCount),
+      }
+    );
+  }
 
   if (aSurf->mTextures.size()) {
     poolSize.push_back(
       {
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = static_cast<uint32_t>(imgSize),
+        .descriptorCount = static_cast<uint32_t>(swapchainCount),
       }
     );
   }
@@ -1038,7 +1039,7 @@ void VulkanRenderer::CreateDescriptorPool(std::shared_ptr<RenderSurface> aSurf) 
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.poolSizeCount = poolSize.size();
   poolInfo.pPoolSizes = poolSize.data();
-  poolInfo.maxSets = static_cast<uint32_t>(imgSize);
+  poolInfo.maxSets = static_cast<uint32_t>(swapchainCount);
 
   CALL_VK(vkCreateDescriptorPool(mDeviceInfo.device, &poolInfo, nullptr, &aSurf->mDescriptorPool));
 }
@@ -1046,27 +1047,27 @@ void VulkanRenderer::CreateDescriptorPool(std::shared_ptr<RenderSurface> aSurf) 
 void VulkanRenderer::CreateDescriptorSet(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf) {
   CreateDescriptorPool(aSurf);
 
-  const int imgSize = mSwapchain.displayImages.size();
-  std::vector<VkDescriptorSetLayout> layouts(imgSize, aSurf->mDescriptorSetLayout);
+  const int swapchainCount = mSwapchain.displayImages.size();
+  std::vector<VkDescriptorSetLayout> layouts(swapchainCount, aSurf->mDescriptorSetLayout);
   VkDescriptorSetAllocateInfo desAllocInfo{
           .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
           .descriptorPool = aSurf->mDescriptorPool,
-          .descriptorSetCount = static_cast<uint32_t>(imgSize),
+          .descriptorSetCount = static_cast<uint32_t>(swapchainCount),
           .pSetLayouts = layouts.data(),
   };
-  aSurf->mDescriptorSets.resize(imgSize);
+  aSurf->mDescriptorSets.resize(swapchainCount);
   CALL_VK(vkAllocateDescriptorSets(mDeviceInfo.device, &desAllocInfo, aSurf->mDescriptorSets.data()));
 
-  // TODO: check if surf has no uniform buffer.
-  for (size_t i = 0; i < imgSize; i++) {
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = aSurf->mUniformBuffers[i];
-    bufferInfo.offset = 0;
-    bufferInfo.range = aBufferSize;
-
+  for (size_t i = 0; i < swapchainCount; i++) {
     std::vector<VkWriteDescriptorSet> descriptorWrite;
 
     if (aSurf->mUniformBuffers.size()) {
+      VkDescriptorBufferInfo bufferInfo {
+        .buffer = aSurf->mUniformBuffers[i],
+        .offset = 0,
+        .range = aBufferSize,
+      };
+
       descriptorWrite.push_back({
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = aSurf->mDescriptorSets[i],
@@ -1079,11 +1080,18 @@ void VulkanRenderer::CreateDescriptorSet(VkDeviceSize aBufferSize, std::shared_p
     }
 
     if (aSurf->mTextures.size()) {
-      VkDescriptorImageInfo imageInfo;
       // TODO: support multiple textures.
-      imageInfo.imageView   = aSurf->mTextures[0].view;                // The image's view (images are never directly accessed by the shader, but rather through views defining subresources)
-      imageInfo.sampler     = aSurf->mTextures[0].sampler;             // The sampler (Telling the pipeline how to sample the texture, including repeat, border, etc.)
-      imageInfo.imageLayout = aSurf->mTextures[0].imageLayout;        // The current layout of the image (Note: Should always fit the actual use, e.g. shader read)
+      VkDescriptorImageInfo imageInfo {
+        // The image's view (images are never directly accessed by the shader,
+        // but rather through views defining subresources)
+        .imageView   = aSurf->mTextures[0].view,
+        // The sampler (Telling the pipeline how to sample the texture,
+        // including repeat, border, etc.)
+        .sampler     = aSurf->mTextures[0].sampler,
+        // The current layout of the image (Note: Should always fit
+        // the actual use, e.g. shader read)
+        .imageLayout = aSurf->mTextures[0].imageLayout,
+      };
 
       descriptorWrite.push_back({
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1212,73 +1220,72 @@ void VulkanRenderer::ConstructRenderPass() {
   CreateSyncObjects();
 }
 
-// TODO: merge it with VulkanRenderer::CreateCommandBuffer()
-VkCommandBuffer VulkanRenderer::CreateCommandBuffer(VkCommandBufferLevel level, bool begin) {
-  assert(mRenderInfo.cmdPool && "No command pool exists in the device");
+//VkCommandBuffer VulkanRenderer::CreateCommandBuffer(VkCommandBufferLevel level, bool begin) {
+//  assert(mRenderInfo.cmdPool && "No command pool exists in the device");
+//
+//  VkCommandBufferAllocateInfo cmdBufAllocateInfo {
+//    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+//    .commandPool = mRenderInfo.cmdPool,
+//    .level = level,
+//    .commandBufferCount = 1,
+//  };
+//
+//  VkCommandBuffer commandBuffer;
+//  CALL_VK(vkAllocateCommandBuffers(mDeviceInfo.device, &cmdBufAllocateInfo, &commandBuffer));
+//
+//  // If requested, also start recording for the new command buffer
+//  if (begin)
+//  {
+//    VkCommandBufferBeginInfo commandBufferInfo {
+//      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+//      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+//    };
+//    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//    CALL_VK(vkBeginCommandBuffer(commandBuffer, &commandBufferInfo));
+//  }
+//  return commandBuffer;
+//}
 
-  VkCommandBufferAllocateInfo cmdBufAllocateInfo {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool = mRenderInfo.cmdPool,
-    .level = level,
-    .commandBufferCount = 1,
-  };
+//void VulkanRenderer::FlushCommandBuffer(VkCommandBuffer aCommandBuffer, VkQueue aQueue,
+//                                        bool free, VkSemaphore aSignalSemaphore) {
+//  if (aCommandBuffer == VK_NULL_HANDLE) {
+//    return;
+//  }
+//
+//  CALL_VK(vkEndCommandBuffer(aCommandBuffer));
+//  VkSubmitInfo submitInfo {
+//    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+//    .commandBufferCount = 1,
+//    .pCommandBuffers = &aCommandBuffer
+//  };
+//
+//  if (aSignalSemaphore) {
+//    submitInfo.pSignalSemaphores = &aSignalSemaphore;
+//    submitInfo.signalSemaphoreCount = 1;
+//  }
+//
+//  VkFenceCreateInfo fenceInfo {
+//    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+//    .flags = 0,
+//  };
+//
+//  VkFence fence;
+//  CALL_VK(vkCreateFence(mDeviceInfo.device, &fenceInfo, nullptr, &fence));
+//
+//  // Submit to the queue
+//  CALL_VK(vkQueueSubmit(aQueue, 1, &submitInfo, fence));
+//  // Wait for the fence to signal that command buffer has finished executing
+//  const long long DEFAULT_FENCE_TIMEOUT = 100000000000;        // Default fence timeout in nanoseconds
+//  CALL_VK(vkWaitForFences(mDeviceInfo.device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+//  vkDestroyFence(mDeviceInfo.device, fence, nullptr);
+//  // TODO: using vkQueueWaitIdle(graphicsQueue); to replace fence?
+//
+//  if (aCommandBuffer && free) {
+//    vkFreeCommandBuffers(mDeviceInfo.device, mRenderInfo.cmdPool, 1, &aCommandBuffer);
+//  }
+//}
 
-  VkCommandBuffer commandBuffer;
-  CALL_VK(vkAllocateCommandBuffers(mDeviceInfo.device, &cmdBufAllocateInfo, &commandBuffer));
-
-  // If requested, also start recording for the new command buffer
-  if (begin)
-  {
-    VkCommandBufferBeginInfo commandBufferInfo {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-    };
-    commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    CALL_VK(vkBeginCommandBuffer(commandBuffer, &commandBufferInfo));
-  }
-  return commandBuffer;
-}
-
-void VulkanRenderer::FlushCommandBuffer(VkCommandBuffer aCommandBuffer, VkQueue aQueue,
-                                        bool free, VkSemaphore aSignalSemaphore) {
-  if (aCommandBuffer == VK_NULL_HANDLE) {
-    return;
-  }
-
-  CALL_VK(vkEndCommandBuffer(aCommandBuffer));
-  VkSubmitInfo submitInfo {
-    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    .commandBufferCount = 1,
-    .pCommandBuffers = &aCommandBuffer
-  };
-
-  if (aSignalSemaphore) {
-    submitInfo.pSignalSemaphores = &aSignalSemaphore;
-    submitInfo.signalSemaphoreCount = 1;
-  }
-
-  VkFenceCreateInfo fenceInfo {
-    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-    .flags = 0,
-  };
-
-  VkFence fence;
-  CALL_VK(vkCreateFence(mDeviceInfo.device, &fenceInfo, nullptr, &fence));
-
-  // Submit to the queue
-  CALL_VK(vkQueueSubmit(aQueue, 1, &submitInfo, fence));
-  // Wait for the fence to signal that command buffer has finished executing
-  const long long DEFAULT_FENCE_TIMEOUT = 100000000000;        // Default fence timeout in nanoseconds
-  CALL_VK(vkWaitForFences(mDeviceInfo.device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
-  vkDestroyFence(mDeviceInfo.device, fence, nullptr);
-  // TODO: using vkQueueWaitIdle(graphicsQueue); to replace fence?
-
-  if (aCommandBuffer && free) {
-    vkFreeCommandBuffers(mDeviceInfo.device, mRenderInfo.cmdPool, 1, &aCommandBuffer);
-  }
-}
-
-bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_ptr<RenderSurface> aSurf) {
+bool VulkanRenderer::CreateImage(const char* aFilePath, RenderSurface::VulkanTexture& aTexture, bool& aUseStaging) {
   std::string fileName(aFilePath);
   const int index = fileName.rfind('.');
   if (index == std::string::npos ||
@@ -1291,18 +1298,18 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
 
   ktxTexture* ktxTexture;
   if (ktxTexture_CreateFromNamedFile(externalFilepath.c_str(),
-          KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTexture) != KTX_SUCCESS ||
-          !ktxTexture) {
+                                     KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxTexture) != KTX_SUCCESS ||
+      !ktxTexture) {
     LOG_E(gAppName.data(), "Couldn't load %s image.", externalFilepath.c_str());
     return false;
   }
 
   // upload it to a Vulkan image object
   const VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-  RenderSurface::VulkanTexture texture;
-  texture.width = ktxTexture->baseWidth;
-  texture.height = ktxTexture->baseHeight;
-  texture.mipLevels = ktxTexture->numLevels;
+  aTexture.width = ktxTexture->baseWidth;
+  aTexture.height = ktxTexture->baseHeight;
+  aTexture.mipLevels = ktxTexture->numLevels;
+  aTexture.format = format;
 
   // using stage buffer to copy the texture data to a device
   // local optimal memory.
@@ -1317,21 +1324,21 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
   }
 
   VkMemoryAllocateInfo memoryAllocateInfo {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+          .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
   };
   VkMemoryRequirements memReq  = {};
   ktx_uint8_t* ktxImageData   = ktxTexture_GetData(ktxTexture);
   ktx_size_t   ktxTextureSize = ktxTexture_GetSize(ktxTexture);
+  aUseStaging = useStaging;
 
-  // TODO: Move it to CreateImage()
   if (useStaging) {
     VkBuffer       stagingBuffer;
     VkDeviceMemory stagingMemory;
     VkBufferCreateInfo bufferCreateInfo {
-      .size = ktxTextureSize,
-      // This buffer is used as a transfer source for the buffer copy
-      .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .size = ktxTextureSize,
+            // This buffer is used as a transfer source for the buffer copy
+            .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
 
     CALL_VK(vkCreateBuffer(mDeviceInfo.device, &bufferCreateInfo, nullptr, &stagingBuffer));
@@ -1351,52 +1358,50 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
 
     // Create optimal tiled target image on the device
     VkImageCreateInfo imageCreateInfo {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = format,
-      .mipLevels = texture.mipLevels,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .extent = {texture.width, texture.height, 1},
-      .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .mipLevels = aTexture.mipLevels,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .extent = {aTexture.width, aTexture.height, 1},
+            .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     };
-    CALL_VK(vkCreateImage(mDeviceInfo.device, &imageCreateInfo, nullptr, &texture.image));
+    CALL_VK(vkCreateImage(mDeviceInfo.device, &imageCreateInfo, nullptr, &aTexture.image));
 
-    vkGetImageMemoryRequirements(mDeviceInfo.device, texture.image, &memReq);
+    vkGetImageMemoryRequirements(mDeviceInfo.device, aTexture.image, &memReq);
     memoryAllocateInfo.allocationSize = memReq.size;
     MapMemoryTypeToIndex(memReq.memoryTypeBits,
                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                          &memoryAllocateInfo.memoryTypeIndex);
-    CALL_VK(vkAllocateMemory(mDeviceInfo.device, &memoryAllocateInfo, nullptr, &texture.deviceMemory));
-    CALL_VK(vkBindImageMemory(mDeviceInfo.device, texture.image, texture.deviceMemory, 0));
+    CALL_VK(vkAllocateMemory(mDeviceInfo.device, &memoryAllocateInfo, nullptr, &aTexture.deviceMemory));
+    CALL_VK(vkBindImageMemory(mDeviceInfo.device, aTexture.image, aTexture.deviceMemory, 0));
 
-    // TODO: rename it to beginSingleTimeCommands
-    VkCommandBuffer copyCommand = CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    VkCommandBuffer copyCommand = BeginSingleTimeCommands();//CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
     // Image memory barriers for the texture image
-    // TODO: move it to copyBuffer(), transitionImageLayout()
     // The sub resource range describes the regions of the image that will be transitioned using the memory barriers below
     VkImageSubresourceRange subresourceRange {
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .baseMipLevel = 0,
-      .levelCount = texture.mipLevels,
-      .layerCount = 1,
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = aTexture.mipLevels,
+            .layerCount = 1,
     };
 
     // Transition the texture image layout to transfer target, so we can safely copy our buffer data to it.
     VkImageMemoryBarrier imageMemoryBarrier {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = texture.image,
-      .subresourceRange = subresourceRange,
-      .srcAccessMask = 0,
-      .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = aTexture.image,
+            .subresourceRange = subresourceRange,
+            .srcAccessMask = 0,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     };
 
     // Insert a memory dependency at the proper pipeline stages that will execute the image layout transition
@@ -1414,8 +1419,7 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
     // Setup buffer copy regions for each mip level
     std::vector<VkBufferImageCopy> bufferCopyRegions;
 
-    // TODO: Move it to copyBufferToImage()
-    for (int i = 0; i < texture.mipLevels; i++) {
+    for (int i = 0; i < aTexture.mipLevels; i++) {
       ktx_size_t        offset;
       if (ktxTexture_GetImageOffset(ktxTexture, i, 0, 0, &offset) != KTX_SUCCESS) {
         LOG_E(gAppName.data(), "%s: Create mipmap level failed,", aFilePath);
@@ -1437,7 +1441,7 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
     vkCmdCopyBufferToImage(
             copyCommand,
             stagingBuffer,
-            texture.image,
+            aTexture.image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             static_cast<uint32_t>(bufferCopyRegions.size()),
             bufferCopyRegions.data());
@@ -1461,10 +1465,10 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
             1, &imageMemoryBarrier);
 
     // Store current layout for later reuse
-    texture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    aTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    // TODO: repname it to endSingleTimeCommands
-    FlushCommandBuffer(copyCommand, mDeviceInfo.graphicsQueue, true);
+    //FlushCommandBuffer(copyCommand, mDeviceInfo.graphicsQueue, true);
+    EndSingleTimeCommands(copyCommand);
 
     // Clean up staging resources
     vkFreeMemory(mDeviceInfo.device, stagingMemory, nullptr);
@@ -1476,17 +1480,17 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
 
     // Load mip map level 0 to linear tiling image
     VkImageCreateInfo imageCreateInfo {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = format,
-      .mipLevels = 1,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_LINEAR,
-      .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
-      .extent = {texture.width, texture.height, 1},
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_LINEAR,
+            .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
+            .extent = {aTexture.width, aTexture.height, 1},
     };
 
     CALL_VK(vkCreateImage(mDeviceInfo.device, &imageCreateInfo, nullptr, &mappableImage));
@@ -1511,32 +1515,32 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
     vkUnmapMemory(mDeviceInfo.device, mappableMemory);
 
     // Linear tiled images don't need to be staged and can be directly used as textures
-    texture.image = mappableImage;
-    texture.deviceMemory = mappableMemory;
-    texture.imageLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    aTexture.image = mappableImage;
+    aTexture.deviceMemory = mappableMemory;
+    aTexture.imageLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     // Setup image memory barrier transfer image to shader read layout
-    VkCommandBuffer copyCommand = CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    VkCommandBuffer copyCommand = BeginSingleTimeCommands(); //CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
     // The sub resource range describes the regions of the image we will be transition
     VkImageSubresourceRange subresourceRange {
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .layerCount = 1,
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .layerCount = 1,
     };
 
     // Transition the texture image layout to shader read, so it can be sampled from
     VkImageMemoryBarrier imageMemoryBarrier {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = texture.image,
-      .subresourceRange = subresourceRange,
-      .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
-      .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = aTexture.image,
+            .subresourceRange = subresourceRange,
+            .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
+            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
     // Insert a memory dependency at the proper pipeline stages that will execute the image layout transition
@@ -1551,8 +1555,17 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
             0, nullptr,
             1, &imageMemoryBarrier);
 
-    FlushCommandBuffer(copyCommand, mDeviceInfo.graphicsQueue, true);
+    //FlushCommandBuffer(copyCommand, mDeviceInfo.graphicsQueue, true);
+    EndSingleTimeCommands(copyCommand);
   }
+
+  return true;
+}
+
+bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_ptr<RenderSurface> aSurf) {
+  bool useStaging = true;
+  RenderSurface::VulkanTexture texture;
+  CreateImage(aFilePath, texture, useStaging);
 
   // Create a texture sampler
   VkSamplerCreateInfo samplerInfo {
@@ -1575,7 +1588,7 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
     samplerInfo.maxAnisotropy = mDeviceInfo.gpuDeviceProperties.limits.maxSamplerAnisotropy;
     samplerInfo.anisotropyEnable = VK_TRUE;
   } else {
-    samplerInfo.maxAnisotropy    = 1.0;
+    samplerInfo.maxAnisotropy = 1.0;
     samplerInfo.anisotropyEnable = VK_FALSE;
   }
 
@@ -1585,7 +1598,7 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
   VkImageViewCreateInfo view {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .viewType = VK_IMAGE_VIEW_TYPE_2D,
-    .format = format,
+    .format = texture.format,
     .components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
     .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
     .subresourceRange.baseMipLevel   = 0,
@@ -1612,10 +1625,15 @@ void VulkanRenderer::DestroyShaderModule(VkShaderModule aShader) {
 }
 
 void VulkanRenderer::DeleteSwapChain() {
-  for (int i = 0; i < mSwapchain.swapchainLength; i++) {
+  for (int i = 0; i < mSwapchain.displayImages.size(); i++) {
     vkDestroyFramebuffer(mDeviceInfo.device, mSwapchain.framebuffers[i], nullptr);
     vkDestroyImageView(mDeviceInfo.device, mSwapchain.displayViews[i], nullptr);
     vkDestroyImage(mDeviceInfo.device, mSwapchain.displayImages[i], nullptr);
+
+    for (const auto& surf : mSurfaces) {
+      vkDestroyBuffer(mDeviceInfo.device, surf->mUniformBuffers[i], nullptr);
+      vkFreeMemory(mDeviceInfo.device, surf->mUniformBuffersMemory[i], nullptr);
+    }
   }
   vkDestroySwapchainKHR(mDeviceInfo.device, mSwapchain.swapchain, nullptr);
 }
@@ -1646,10 +1664,13 @@ void VulkanRenderer::DeleteTextures() {
 
 void VulkanRenderer::DeleteBuffers() {
   for (const auto& surf : mSurfaces) {
-    vkDestroyBuffer(mDeviceInfo.device, surf->mBuffer.vertexBuf, nullptr);
-
+    if (surf->mBuffer.vertexBuf) {
+      vkDestroyBuffer(mDeviceInfo.device, surf->mBuffer.vertexBuf, nullptr);
+      vkFreeMemory(mDeviceInfo.device, surf->mBuffer.vertexBufMemory, nullptr);
+    }
     if (surf->mBuffer.indexBuf) {
       vkDestroyBuffer(mDeviceInfo.device, surf->mBuffer.indexBuf, nullptr);
+      vkFreeMemory(mDeviceInfo.device, surf->mBuffer.indexBufMemory, nullptr);
     }
   }
 }
@@ -1712,8 +1733,7 @@ void VulkanRenderer::RenderFrame() {
           .signalSemaphoreCount = 0,
           .pSignalSemaphores = nullptr};
   CALL_VK(vkQueueSubmit(mDeviceInfo.presentqueue, 1, &submit_info, mRenderInfo.fence));
-  CALL_VK(
-          vkWaitForFences(mDeviceInfo.device, 1, &mRenderInfo.fence, VK_TRUE, 100000000));
+  CALL_VK(vkWaitForFences(mDeviceInfo.device, 1, &mRenderInfo.fence, VK_TRUE, 100000000));
 
   VkResult result;
   VkPresentInfoKHR presentInfo{

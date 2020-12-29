@@ -15,7 +15,7 @@ git submodule update --init --recursive
 ## Sync files
 Due to we use `fopen` to access textures from the storage instead of Android asset manager, we need to sync the texture files manually.
 ```
-adb push assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NAME}/files/assets
+adb push --sync assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NAME}/files/assets
 ```
 
 ## Examples

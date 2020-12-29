@@ -22,7 +22,6 @@ class VulkanRenderer {
 public:
   VulkanRenderer() : mAppContext(nullptr), mInitialized(false) {}
   bool Init(android_app* app, const std::string& aAppName);
- // void SetupViewport(int aX, int aY, int aWidth, int aHeight, float aNear, float aFar);
   bool IsReady();
   void Terminate();
   void RenderFrame();
@@ -33,9 +32,7 @@ public:
   bool CreateTextureFromFile(const char* aFilePath, std::shared_ptr<RenderSurface> aSurf);
   void CreateDescriptorSetLayout(std::shared_ptr<RenderSurface> aSurf);
   void CreateDescriptorSet(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf);
-  VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, bool begin);
   void ConstructRenderPass();
-  void FlushCommandBuffer(VkCommandBuffer aCommandBuffer, VkQueue aQueue, bool free, VkSemaphore aSignalSemaphore = VK_NULL_HANDLE);
   VkResult CreateGraphicsPipeline(const char* aVSPath, const char* aFSPath, std::shared_ptr<RenderSurface> aSurf);
 
 private:
@@ -93,6 +90,12 @@ private:
   void CreateVulkanDevice(ANativeWindow* platformWindow,
                           VkApplicationInfo* appInfo);
   void CreateSwapChain();
+  VkCommandBuffer BeginSingleTimeCommands();
+  void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+  void CopyBuffer(VkBuffer aSrcBuffer, VkBuffer aDstBuffer, VkDeviceSize aSize);
+  void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                    VkMemoryPropertyFlags properties, VkBuffer& buffer,
+                    VkDeviceMemory& bufferMemory);
   void CreateFrameBuffers(VkRenderPass& renderPass,
                           VkImageView depthView = VK_NULL_HANDLE);
   void CreateCommandPool();
@@ -101,6 +104,8 @@ private:
   void CreateCommandBuffer();
   VkResult LoadShaderFromFile(const char* filePath, VkShaderModule* shaderOut,
                               ShaderType type);
+  bool CreateImage(const char* aFilePath, RenderSurface::VulkanTexture& aTexture,
+                   bool& aUseStaging);
   void SetImageLayout(VkCommandBuffer cmdBuffer, VkImage image,
                       VkImageLayout oldImageLayout, VkImageLayout newImageLayout,
                       VkPipelineStageFlags srcStages,

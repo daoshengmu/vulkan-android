@@ -33,7 +33,9 @@ public:
 private:
   struct VulkanBufferInfo {
     VkBuffer vertexBuf = VK_NULL_HANDLE;
+    VkDeviceMemory vertexBufMemory = VK_NULL_HANDLE;
     VkBuffer indexBuf = VK_NULL_HANDLE;
+    VkDeviceMemory indexBufMemory = VK_NULL_HANDLE;
   };
 
   struct VulkanGfxPipelineInfo {
@@ -51,6 +53,7 @@ private:
     uint32_t       width;
     uint32_t       height;
     uint32_t       mipLevels;
+    VkFormat       format;
   };
 
   // buffer

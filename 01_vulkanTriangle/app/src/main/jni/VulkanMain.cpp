@@ -32,7 +32,7 @@ bool InitVulkan(android_app* app) {
   surf->mVertexCount = 3;
   surf->mInstanceCount = 1;
   surf->mItemSize = 3;
-  
+
   // 2. create vertex / index buffer
   gRenderer.CreateVertexBuffer(vertexData, surf);
 
