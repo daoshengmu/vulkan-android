@@ -1,7 +1,12 @@
 # vulkan-android
-The purpose of this project is in order to provide step-by-step examples of learning Vulkan. The current examples work well on Android phones which are capable for Vulkan. They have been confirmed running well in AndroidStudio. (Maybe I would make they also be able to run on Mac OS platform in the near future.)
+The purpose of this project is in order to provide step-by-step examples of learning Vulkan. The current examples work well on Android phones which are capable for Vulkan. They have been confirmed running well in AndroidStudio. (*Maybe I would consider making it support macOS platform soon.*)
 
-## Setup instructions
+## Support Platforms
+- [x] **Android**: Android Studio 4.0, API 29, NDK 21, Gradle 6.1.1
+- [ ] **macOS**
+- [ ] **Windows**
+
+## Setup Instructions
 *Clone.*
 ```
 git clone git@github.com:daoshengmu/vulkan-android.git
@@ -12,7 +17,7 @@ cd vulkan-android
 git submodule update --init --recursive
 ```
 
-## Sync files
+## Sync Files
 Due to we use `fopen` to access textures from the storage instead of Android asset manager, we need to sync the texture files manually.
 ```
 adb push --sync assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NAME}/files/assets
@@ -20,17 +25,17 @@ adb push --sync assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NA
 
 ## Examples
 ### Basic
-- [x] 1. Triangle: Using a basic shader and vertex buffer to present how to draw primitives in Vulkan.
-- [x] 2. Cube index buffer: Introduce how to use a index buffer combines with a vertex buffer to draw indexed primitives. 
-- [x] 3. Projection transform: Describe how to use a uniform buffer to send a model-view-projection matrix to a vertex shader, and show how to load Vulkan layer properties from Vulkan jni library.
-- [x] 4. Texture mapping: Giving an example of how to load and create a texture in Vulkan, Then, in fragement shaders, how we fetch the texels of a texture.
+- [x] Triangle: Using a basic shader and vertex buffer to present how to draw primitives in Vulkan.
+- [x] Cube index buffer: Introduce how to use a index buffer combines with a vertex buffer to draw indexed primitives. 
+- [x] Projection transform: Describe how to use a uniform buffer to send a model-view-projection matrix to a vertex shader, and show how to load Vulkan layer properties from Vulkan jni library.
+- [x] Texture mapping: Giving an example of how to load and create a texture in Vulkan, Then, in fragement shaders, how we fetch the texels of a texture.
 
 ### Advance
-- [ ] 5. gltf model loader: Provide a gltf model loader and display gltf in Vulkan.
-- [ ] 6. Physically-based rendering: PBR material support.
-- [ ] 7. Video playback with Vulkan.
+- [ ] *glTF* model loader: Provide a *glTF* model loader and display *glTF* in Vulkan.
+- [ ] Video playback with Vulkan.
+- [ ] Physically-based rendering: PBR material support.
 
-## Useful Resource
+## Additional Resources
 - Vulkan Tutorial, https://vulkan-tutorial.com
 - googlesamples/android-vulkan-tutorials, https://github.com/googlesamples/android-vulkan-tutorials
 - KhronosGroup/Vulkan-Samples, https://github.com/KhronosGroup/Vulkan-Samples
