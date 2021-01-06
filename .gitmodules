@@ -4,3 +4,4 @@
 [submodule "third_party/gfx-math"]
 	path = third_party/gfx-math
 	url = git@github.com:daoshengmu/gfx-math.git
+	branch = master
