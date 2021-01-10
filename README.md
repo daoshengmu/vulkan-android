@@ -16,6 +16,12 @@ cd vulkan-android
 ```
 git submodule update --init --recursive
 ```
+*Update `gfx-math` only.*
+
+Due to we stick with `KTX-Software` v3.0, we can't easily just *git submodule update* for updating all submodules totally, we have to update the submodules respectively to avoid KTX-Software folder is updated.
+```
+git submodule update --remote third_party/gfx-math/
+```
 
 ## Sync Files
 Due to we use `fopen` to access textures from the storage instead of Android asset manager, we need to sync the texture files manually.
