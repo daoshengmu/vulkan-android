@@ -1,0 +1,23 @@
+version: 2.1
+
+orbs:
+  android: circleci/android@0.2.1
+
+jobs:
+  build:
+    executor: android/android
+
+    steps:
+      - checkout
+      - run: git submodule update --init --recursive
+      - run: cd 01_vulkanTriangle
+      - run:
+          name: show folders
+          command: ls
+      - run:
+          name: show path
+          command: pwd
+      - run:
+          name: Build 01_vulkanTriangle
+          working_directory: ~/project/01_vulkanTriangle
+          command: ./gradlew build
