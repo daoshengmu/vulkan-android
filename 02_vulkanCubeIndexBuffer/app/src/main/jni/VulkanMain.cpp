@@ -9,7 +9,6 @@
 #include <component/Material.h>
 
 #include "vulkan_wrapper.h"
-#include "Utils.h"
 #include "VulkanRenderer.h"
 
 static const char* kTAG = "02-Vulkan-Cube-IndexBuffer";

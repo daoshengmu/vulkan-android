@@ -9,7 +9,6 @@
 #include <MathUtils.h>
 
 #include "vulkan_wrapper.h"
-#include "Utils.h"
 #include "VulkanRenderer.h"
 #include "Cube.h"
 #include "Matrix4x4.h"

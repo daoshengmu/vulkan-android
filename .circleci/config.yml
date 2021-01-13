@@ -21,3 +21,19 @@ jobs:
           name: Build 01_vulkanTriangle
           working_directory: ~/project/01_vulkanTriangle
           command: ./gradlew build
+      - run:
+          name: Build 02_vulkanCubeIndexBuffer
+          working_directory: ~/project/02_vulkanCubeIndexBuffer
+          command: ./gradlew build
+      - run:
+          name: Build 03_vulkanProjection
+          working_directory: ~/project/03_vulkanProjection
+          command: ./gradlew build
+      - run:
+          name: Build 04_vulkanTextureMapping
+          working_directory: ~/project/04_vulkanTextureMapping
+          command: ./gradlew build
+      - run:
+          name: Build unittests
+          working_directory: ~/project/unittests
+          command: ./gradlew build

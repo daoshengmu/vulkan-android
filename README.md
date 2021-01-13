@@ -29,6 +29,12 @@ Due to we use `fopen` to access textures from the storage instead of Android ass
 adb push --sync assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NAME}/files/assets
 ```
 
+## Run Build and Tests
+We are currently running automatic build in Circle-CI and partial automatic tests in Github actions because Circle-CI do not support Android emulator launching in their Linux VM.
+**Run Build**: Go to a sub-folder, execute `./gradlew build`.
+
+**Run Tests**: Go to *unittests/* folder, execute `./gradlew connectedCheck`.
+
 ## Examples
 ### Basic
 - [x] Triangle: Using a basic shader and vertex buffer to present how to draw primitives in Vulkan.
