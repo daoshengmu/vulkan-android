@@ -12,7 +12,7 @@
 #include <filesystem>
 #include "ktx.h"
 #include "vulkan_wrapper.h"
-#include "Utils.h"
+#include "Logger.h"
 #include "Platform.h"
 #include "MathUtils.h"
 

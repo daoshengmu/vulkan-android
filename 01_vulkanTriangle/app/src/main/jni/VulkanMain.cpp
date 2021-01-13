@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "vulkan_wrapper.h"
-#include "Utils.h"
 #include "VulkanRenderer.h"
 
 static const char* kTAG = "01-Vulkan-Triangle";
