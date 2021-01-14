@@ -31,6 +31,7 @@ adb push --sync assets/ /storage/emulated/0/Android/data/com.example.{PROJECT_NA
 
 ## Run Build and Tests
 We are currently running automatic build in Circle-CI and partial automatic tests in Github actions because Circle-CI do not support Android emulator launching in their Linux VM.
+
 **Run Build**: Go to a sub-folder, execute `./gradlew build`.
 
 **Run Tests**: Go to *unittests/* folder, execute `./gradlew connectedCheck`.
