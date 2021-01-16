@@ -8,7 +8,6 @@ add_library(app-glue STATIC ${APP_GLUE_DIR}/android_native_app_glue.c)
 set(SRC_JNI_DIR src/main/jni)
 set(UTILS_DIR ../../common/utils)
 set(THIRD_PARTY_DIR ../../third_party)
-set(GTEST_DIR ../../third_party/googletest)
 set(TEST_SRC_DIR src/test/cpp)
 
 add_library(vkexamples SHARED
@@ -20,9 +19,9 @@ add_library(vkexamples SHARED
 include_directories(${UTILS_DIR}
                     ${THIRD_PARTY_DIR}/gfx-math/include)
 
-# Add third party libraries
-add_subdirectory(${THIRD_PARTY_DIR} third_party)
-add_subdirectory(${GTEST_DIR} gtest)
+# Add google test libraries.
+# gtest's CMakeLists is under the folder of googletest.
+add_subdirectory(${THIRD_PARTY_DIR}/googletest gtest)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Werror \
                      -DVK_USE_PLATFORM_ANDROID_KHR")
