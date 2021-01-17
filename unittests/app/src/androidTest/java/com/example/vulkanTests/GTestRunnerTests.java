@@ -1,23 +1,15 @@
 package com.example.vulkanTests;
 
-//import android.support.test.InstrumentationRegistry;
 import android.util.Log;
-
 import androidx.test.core.app.ApplicationProvider;
-
 import org.apache.commons.lang3.mutable.MutableObject;
-import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.util.List;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 public class GTestRunnerTests {
@@ -40,8 +32,8 @@ public class GTestRunnerTests {
     @Test
     public void testGTest() {
         MutableObject<String> output= new MutableObject<>();
-        boolean failed = gtestRunner.run("--gtest_filter=" + testName, output);
+        boolean success = gtestRunner.run("--gtest_filter=" + testName, output);
         Log.d(TAG, output.toString());
-        assertFalse(failed);
+        assertTrue(success);
     }
 }

@@ -12,14 +12,14 @@ import java.util.Scanner;
 public class GTestRunner {
     public GTestRunner(Context ctx) {
         System.loadLibrary(ctx.getResources().getString(R.string.native_lib_name));
-        cptr= create(ctx.getCacheDir().toString());
-        tests= loadTestsNames();
+        cptr = create(ctx.getCacheDir().toString());
+        tests = loadTestsNames();
     }
 
     @Override
     protected void finalize() {
         destroy(cptr);
-        cptr= 0;
+        cptr = 0;
     }
 
     public boolean run(String arg, MutableObject<String> output) {
@@ -27,26 +27,29 @@ public class GTestRunner {
     }
 
     protected List<String> loadTestsNames() {
-        List<String> tests= new ArrayList<>();
+        List<String> tests = new ArrayList<>();
 
-        MutableObject<String> output= new MutableObject<>();
-        run("--gtest_list_tests", output);
-        Scanner scanner= new Scanner(output.getValue());
-        String parent= "";
+        MutableObject<String> output = new MutableObject<>();
+        boolean success = run("--gtest_list_tests", output);
+        if (!success) {
+            System.out.println("run test failed.");
+        }
+
+        Scanner scanner = new Scanner(output.getValue());
+        String parent = "";
         while (scanner.hasNextLine()) {
-            String line= StringUtils.trim(scanner.nextLine());
+            String line = StringUtils.trim(scanner.nextLine());
             if (line.endsWith(".")) {
-                parent= line;
+                parent = line;
             } else {
                 if (line.contains("#")) {
-                    line= StringUtils.trim(line.split("#")[0]);
+                    line = StringUtils.trim(line.split("#")[0]);
                 }
 
                 tests.add(parent + line);
             }
         }
         scanner.close();
-
         return tests;
     }
 

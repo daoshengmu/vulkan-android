@@ -13,20 +13,19 @@ public:
   bool run(const std::string &gtestArg, std::string &output) {
     captureStdout();
 
-    const char *argv[]= { "./runner", gtestArg.c_str() };
-    int argc= sizeof(argv)/sizeof(argv[0]);
+    const char *argv[] = { "./runner", gtestArg.c_str() };
+    int argc = sizeof(argv)/sizeof(argv[0]);
     initGoogleTest(&argc, const_cast<char **>(argv));
 
-    int failed= RUN_ALL_TESTS();
-
-    output= getCapturedStdout();
-
-    return failed==1;
+    // 0 if successful, or 1 otherwise.
+    int success = RUN_ALL_TESTS();
+    output = getCapturedStdout();
+    return success == 0;
   }
 
 protected:
   void captureStdout() {
-    tempFile= tempDir + "/gtest_captured_stream.XXXXXX";
+    tempFile = tempDir + "/gtest_captured_stream.XXXXXX";
     captured_fd = mkstemp((char*)(tempFile.c_str()));
     fflush(NULL);
     dup2(captured_fd, STDOUT_FILENO);
@@ -42,7 +41,7 @@ protected:
 
   void initGoogleTest(int* argc, char** argv) {
     // trick gtest into thinking it hasn't run yet
-    ::testing::GTEST_FLAG(list_tests)= false;
+    ::testing::GTEST_FLAG(list_tests) = false;
     auto gargvs = testing::internal::GetArgvs();
     gargvs.clear();
 
