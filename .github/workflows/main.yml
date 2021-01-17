@@ -1,0 +1,75 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. 
+on:
+  # Triggers the workflow on push or pull request events but only for the master branch
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: macos-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      # Because the changset of KTX we use was still a private repo.
+      - name: Checkout submodules using a PAT
+        run: |
+          git config --file .gitmodules --get-regexp url | while read url; do
+            git config --file=.gitmodules $(echo "$url" | sed -E "s/git@github.com:|https:\/\/github.com\//https:\/\/${{ secrets.CI_PAT }}:${{ secrets.CI_PAT }}@github.com\//")
+          done
+          git submodule sync
+          git submodule update --init --recursive
+
+      # Runs a single command using the runners shell
+      - name: Build 01_vulkanTriangle
+        run: ./01_vulkanTriangle/gradlew build
+        
+      - name: Build 02_vulkanCubeIndexBuffer
+        run: ./02_vulkanCubeIndexBuffer/gradlew build
+        
+      - name: Build 03_vulkanProjection
+        run: ./03_vulkanProjection/gradlew build
+        
+      - name: Build 04_vulkanTextureMapping
+        run: ./04_vulkanTextureMapping/gradlew build
+          
+  unitttest:
+    runs-on: macos-latest
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      # Because the changset of KTX we use was still a private repo.
+      - name: Checkout submodules using a PAT
+        run: |
+          git config --file .gitmodules --get-regexp url | while read url; do
+            git config --file=.gitmodules $(echo "$url" | sed -E "s/git@github.com:|https:\/\/github.com\//https:\/\/${{ secrets.CI_PAT }}:${{ secrets.CI_PAT }}@github.com\//")
+          done
+          git submodule sync
+          git submodule update --init --recursive
+        
+      # For matching with Cirecle-CI default environment.
+      - name: Install NDK
+        run: echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --install "ndk;21.0.6113669"
+        
+      - name: Build unittests
+        run: ./unittests/gradlew build
+      - name: Run tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          script: cd unittests/ && ./gradlew connectedCheck
