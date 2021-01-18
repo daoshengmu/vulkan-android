@@ -29,7 +29,6 @@ JNIEXPORT jboolean JNICALL Java_com_example_vulkanTests_GTestRunner_run(JNIEnv *
 
   std::string output;
   jboolean passed = gtestRunner->run(gtestArg, output);
-
   jclass clazz = env->GetObjectClass(joutput);
   // set test lists to the output string.
   jmethodID methodId = env->GetMethodID(clazz, "setValue", "(Ljava/lang/Object;)V");

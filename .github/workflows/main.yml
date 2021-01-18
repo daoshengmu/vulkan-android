@@ -34,18 +34,25 @@ jobs:
           git submodule sync
           git submodule update --init --recursive
 
+      # For matching with Cirecle-CI default environment.
+      - name: Install NDK
+        run: echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --install "ndk;21.0.6113669"
+       
       # Runs a single command using the runners shell
       - name: Build 01_vulkanTriangle
-        run: ./01_vulkanTriangle/gradlew build
+        run: cd 01_vulkanTriangle/ && ./gradlew build
         
       - name: Build 02_vulkanCubeIndexBuffer
-        run: ./02_vulkanCubeIndexBuffer/gradlew build
+        run: cd 02_vulkanCubeIndexBuffer/ && ./gradlew build
         
       - name: Build 03_vulkanProjection
-        run: ./03_vulkanProjection/gradlew build
+        run: cd 03_vulkanProjection/ && ./gradlew build
         
       - name: Build 04_vulkanTextureMapping
-        run: ./04_vulkanTextureMapping/gradlew build
+        run: cd 04_vulkanTextureMapping/ && ./gradlew build
+        
+      - name: Build unittests
+        run: cd unittests/ && ./gradlew build
           
   unitttest:
     runs-on: macos-latest
@@ -62,14 +69,9 @@ jobs:
           git submodule sync
           git submodule update --init --recursive
         
-      # For matching with Cirecle-CI default environment.
-      - name: Install NDK
-        run: echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --install "ndk;21.0.6113669"
-        
-      - name: Build unittests
-        run: ./unittests/gradlew build
       - name: Run tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
+          ndk: 21.0.6113669  # For matching with Cirecle-CI default environment.
           script: cd unittests/ && ./gradlew connectedCheck
