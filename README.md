@@ -36,6 +36,8 @@ We are currently running automatic build in Circle-CI and partial automatic test
 
 **Run Tests**: Go to *unittests/* folder, execute `./gradlew connectedCheck`.
 
+![CI](https://github.com/daoshengmu/vulkan-android/workflows/CI/badge.svg)
+
 [![CircleCI](https://circleci.com/gh/daoshengmu/vulkan-android.svg?style=shield)](https://circleci.com/gh/daoshengmu/vulkan-android)
 
 ## Examples
