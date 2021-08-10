@@ -18,15 +18,13 @@ add_library(vkexamples SHARED
         ${WRAPPER_DIR}/vulkan_wrapper.cpp
         ${SRC_RENDERER_DIR}/VulkanRenderer.cpp
         ${SRC_RENDERER_DIR}/Cube.cpp
-        ${UTILS_DIR}/Platform.cpp
-        )
+        ${UTILS_DIR}/Platform.cpp)
 
 include_directories(${WRAPPER_DIR}
         ${UTILS_DIR}
         ${SRC_RENDERER_DIR}
         ${THIRD_PARTY_DIR}/gfx-math/include
-        ${THIRD_PARTY_DIR}/KTX-Software/include
-        )
+        ${THIRD_PARTY_DIR}/KTX-Software/include)
 
 # Add third party libraries
 add_subdirectory(../../third_party third_party)

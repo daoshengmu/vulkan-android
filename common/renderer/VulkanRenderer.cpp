@@ -60,6 +60,46 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallback(
   return VK_FALSE;
 }
 
+const std::vector<VkVertexInputBindingDescription>&
+GetVertexInputBindingDescription(RenderSurface::VertexInputType aType, uint aItemSize) {
+  switch (aType) {
+    case RenderSurface::VertexInputType_Pos3Normal3Tangent4UV2:
+      const static std::vector<VkVertexInputBindingDescription> vertexInputPos3Normal3Tangent4UV2Bindings({
+        {
+             .binding = 0,
+             .stride = 3 * uint32_t(sizeof(float)),
+             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+         },
+        {
+            .binding = 1,
+            .stride = 3 * uint32_t(sizeof(float)),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+        },
+        {
+            .binding = 2,
+            .stride = 4 * uint32_t(sizeof(float)),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+        },
+        {
+            .binding = 3,
+            .stride = 2 * uint32_t(sizeof(float)),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+        }
+      });
+      return vertexInputPos3Normal3Tangent4UV2Bindings;
+
+    default:
+      const static std::vector<VkVertexInputBindingDescription> vertexInputBindings({
+         {
+           .binding = 0,
+           .stride = aItemSize * uint32_t(sizeof(float)),
+           .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+         }
+      });
+      return vertexInputBindings;
+  }
+}
+
 const std::vector<VkVertexInputAttributeDescription>&
 GetVertexInputAttributeDescription(RenderSurface::VertexInputType aType) {
   switch (aType) {
@@ -101,6 +141,37 @@ GetVertexInputAttributeDescription(RenderSurface::VertexInputType aType) {
         }
       };
       return vertexPosColorNormalUV;
+    case RenderSurface::VertexInputType_Pos3Normal3Tangent4UV2:
+      // THIS IS for TinyGLTF!
+      // The vertex buffer format in TinyGLTF is multiple binding instead of
+      // a single buffer within multiple locations.
+      const static std::vector<VkVertexInputAttributeDescription> vertexPosNormalTangentUV = {
+        {
+          .binding = 0,
+          .location = 0,
+          .format = VK_FORMAT_R32G32B32_SFLOAT,
+          .offset = 0 * sizeof(float)
+        },
+        {
+          .binding = 1,
+          .location = 1,
+          .format = VK_FORMAT_R32G32B32_SFLOAT,
+          .offset = 0 * sizeof(float)
+        },
+        {
+          .binding = 2,
+          .location = 2,
+          .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+          .offset = 0 * sizeof(float)
+        },
+        {
+          .binding = 3,
+          .location = 3,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = 0 * sizeof(float)
+        }
+      };
+      return vertexPosNormalTangentUV;
     default:
       const static std::vector<VkVertexInputAttributeDescription> undefined;
       LOG_E(gAppName.data(), "Undefined VertexInputType.");
@@ -731,9 +802,13 @@ void VulkanRenderer::CreateVertexBuffer(const std::vector<float>& aVertexData,
   // Create a local buffer and let staging buffer copy on it for the GPU optimal usage.
   // (It might be acceptable just copying data to the local buffer without staging buffer
   // and it would have penalty on performance.
+  VkBuffer vertexBuf = VK_NULL_HANDLE;
+  VkDeviceMemory vertexBufMemory = VK_NULL_HANDLE;
   CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, aSurf->mBuffer.vertexBuf, aSurf->mBuffer.vertexBufMemory);
-  CopyBuffer(stagingBuffer, aSurf->mBuffer.vertexBuf, bufferSize);
+               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuf, vertexBufMemory);
+  CopyBuffer(stagingBuffer, vertexBuf, bufferSize);
+  aSurf->mBuffer.vertexBuf.push_back(vertexBuf);
+  aSurf->mBuffer.vertexBufMemory.push_back(vertexBufMemory);
 
   vkDestroyBuffer(mDeviceInfo.device, stagingBuffer, nullptr);
   vkFreeMemory(mDeviceInfo.device, stagingBufferMemory, nullptr);
@@ -937,36 +1012,16 @@ VkResult VulkanRenderer::CreateGraphicsPipeline(const char* aVSPath,
   };
 
   // Specify vertex input state
-  VkVertexInputBindingDescription vertex_input_bindings{
-    .binding = 0,
-    .stride = aSurf->mItemSize * uint32_t(sizeof(float)),
-    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-  };
-
-  const auto& vertexInput = GetVertexInputAttributeDescription(aSurf->mVertexInput);
-//  VkVertexInputAttributeDescription vertex_input_attributes[2]{{ // from vertex shader
-//      .binding = 0,
-//      .location = 0,
-//      .format = VK_FORMAT_R32G32B32_SFLOAT,
-//      .offset = 0
-//    }, {
-//      .binding = 0,
-//      .location = 1,
-//      .format = VK_FORMAT_R32G32B32_SFLOAT,
-//      .offset = 3 * 4 // 4: float
-//    }
-//  };
+  const auto& vertexInputBindings = GetVertexInputBindingDescription(aSurf->mVertexInput, aSurf->mItemSize);
+  const auto& vertexInputAttr = GetVertexInputAttributeDescription(aSurf->mVertexInput);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo{
     .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
     .pNext = nullptr,
-    .vertexBindingDescriptionCount = 1,
-    .pVertexBindingDescriptions = &vertex_input_bindings,
-//    .vertexAttributeDescriptionCount = sizeof(vertex_input_attributes)
-//                                    / sizeof(VkVertexInputAttributeDescription),
-//    .pVertexAttributeDescriptions = vertex_input_attributes
-    .vertexAttributeDescriptionCount = (uint32_t)vertexInput.size(),
-    .pVertexAttributeDescriptions = vertexInput.data()
+    .vertexBindingDescriptionCount = (uint32_t)vertexInputBindings.size(),
+    .pVertexBindingDescriptions = vertexInputBindings.data(),
+    .vertexAttributeDescriptionCount = (uint32_t)vertexInputAttr.size(),
+    .pVertexAttributeDescriptions = vertexInputAttr.data()
   };
 
   // Create the pipeline cache
@@ -1082,7 +1137,7 @@ void VulkanRenderer::CreateDescriptorSet(VkDeviceSize aBufferSize, std::shared_p
     if (aSurf->mTextures.size()) {
       // TODO: support multiple textures.
       VkDescriptorImageInfo imageInfo {
-        // The image's view (images are never directly accessed by the shader,
+                                                                                                                                                                                                                                                                                                                                                                                                                                     // The image's view (images are never directly accessed by the shader,
         // but rather through views defining subresources)
         .imageView   = aSurf->mTextures[0].view,
         // The sampler (Telling the pipeline how to sample the texture,
@@ -1150,25 +1205,25 @@ void VulkanRenderer::ConstructRenderPass() {
     // Now we start a renderpass. Any draw command has to be recorded in a
     // renderpass
     VkClearValue clearVals{
-            .color.float32[0] = 0.1f,
-            .color.float32[1] = 0.1f,
-            .color.float32[2] = 0.2f,
-            .color.float32[3] = 1.0f,
+      .color.float32[0] = 0.1f,
+      .color.float32[1] = 0.1f,
+      .color.float32[2] = 0.2f,
+      .color.float32[3] = 1.0f,
     };
 
     VkRenderPassBeginInfo renderPassBeginInfo{
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .pNext = nullptr,
-            .renderPass = mRenderInfo.renderPass,
-            .framebuffer = mSwapchain.framebuffers[bufferIndex],
-            .renderArea = {
-                    .offset = {
-                      .x = 0, .y = 0,
-                    },
-                    .extent = mSwapchain.displaySize
-            },
-            .clearValueCount = 1,
-            .pClearValues = &clearVals
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .pNext = nullptr,
+      .renderPass = mRenderInfo.renderPass,
+      .framebuffer = mSwapchain.framebuffers[bufferIndex],
+      .renderArea = {
+              .offset = {
+                .x = 0, .y = 0,
+              },
+              .extent = mSwapchain.displaySize
+      },
+      .clearValueCount = 1,
+      .pClearValues = &clearVals
     };
     vkCmdBeginRenderPass(mRenderInfo.cmdBuffer[bufferIndex], &renderPassBeginInfo,
                          VK_SUBPASS_CONTENTS_INLINE);
@@ -1178,9 +1233,11 @@ void VulkanRenderer::ConstructRenderPass() {
       vkCmdBindPipeline(mRenderInfo.cmdBuffer[bufferIndex],
                         VK_PIPELINE_BIND_POINT_GRAPHICS, surf->mGfxPipeline.pipeline);
 
-      VkDeviceSize offset = 0;
-      vkCmdBindVertexBuffers(mRenderInfo.cmdBuffer[bufferIndex], 0, 1,
-                             &surf->mBuffer.vertexBuf, &offset);
+      const VkDeviceSize offset = 0;
+      for (int i = 0; i < surf->mBuffer.vertexBuf.size(); i++) {
+        vkCmdBindVertexBuffers(mRenderInfo.cmdBuffer[bufferIndex], i, 1,
+                               &surf->mBuffer.vertexBuf[i], &offset);
+      }
 
       if (surf->mBuffer.indexBuf) {
         vkCmdBindIndexBuffer(mRenderInfo.cmdBuffer[bufferIndex],
@@ -1193,6 +1250,7 @@ void VulkanRenderer::ConstructRenderPass() {
                                 0, 1, &surf->mDescriptorSets[bufferIndex], 0, nullptr);
       }
 
+      // TOOD: Check index buffer data.
       if (surf->mBuffer.indexBuf) {
         // Draw Triangle with indexed
         // commandBuffer, indexCount, instanceCount, firstVertex, vertexOffset, firstInstance
@@ -1544,7 +1602,7 @@ bool VulkanRenderer::CreateImage(const char* aFilePath, RenderSurface::VulkanTex
     };
 
     // Insert a memory dependency at the proper pipeline stages that will execute the image layout transition
-    // Source pipeline stage is host write/read exection (VK_PIPELINE_STAGE_HOST_BIT)
+    // Source pipeline stage is host write/read execution (VK_PIPELINE_STAGE_HOST_BIT)
     // Destination pipeline stage fragment shader access (VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
     vkCmdPipelineBarrier(
             copyCommand,
@@ -1616,6 +1674,160 @@ bool VulkanRenderer::CreateTextureFromFile(const char* aFilePath, std::shared_pt
   return true;
 }
 
+bool VulkanRenderer::CreateTextureFromBuffer(const char* aBuffer, int aTexWidth, int aTexHeight,
+                                             int aComponent, std::shared_ptr<RenderSurface> aSurf) {
+  RenderSurface::VulkanTexture texture;
+  const VkDeviceSize imageSize = aTexWidth * aTexHeight * aComponent;
+
+  if (!aBuffer) {
+    LOG_E(gAppName.data(), "buffer is a nullptr from CreateTextureFromBuffer.");
+    return false;
+  }
+
+  const VkFormat format = aComponent == 4 ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R8G8B8_UNORM;
+  texture.width = aTexWidth;
+  texture.height = aTexHeight;
+  texture.mipLevels = 0;
+  texture.format = format;
+
+  VkBuffer stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+  CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+  void* data;
+  vkMapMemory(mDeviceInfo.device, stagingBufferMemory, 0, imageSize, 0, &data);
+  memcpy(data, aBuffer, static_cast<size_t>(imageSize));
+  vkUnmapMemory(mDeviceInfo.device, stagingBufferMemory);
+
+  VkImage textureImage;
+  VkDeviceMemory textureImageMemory;
+
+  // createImage
+  VkImageCreateInfo imageInfo{};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.extent.width = aTexWidth;
+  imageInfo.extent.height = aTexHeight;
+  imageInfo.extent.depth = 1;
+  imageInfo.mipLevels = 1;
+  imageInfo.arrayLayers = 1;
+  imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  if (vkCreateImage(mDeviceInfo.device, &imageInfo, nullptr, &textureImage) != VK_SUCCESS) {
+    LOG_E(gAppName.data(), "failed to create image!");
+    return false;
+  }
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(mDeviceInfo.device, textureImage, &memRequirements);
+
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocInfo.allocationSize = memRequirements.size;
+  MapMemoryTypeToIndex(memRequirements.memoryTypeBits,
+          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &allocInfo.memoryTypeIndex);
+
+  if (vkAllocateMemory(mDeviceInfo.device, &allocInfo, nullptr, &textureImageMemory) != VK_SUCCESS) {
+    LOG_E(gAppName.data(), "failed to allocate image memory!");
+    return false;
+  }
+
+  vkBindImageMemory(mDeviceInfo.device, textureImage, textureImageMemory, 0);
+  VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+  SetImageLayout(commandBuffer, textureImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+  EndSingleTimeCommands(commandBuffer);
+
+  commandBuffer = BeginSingleTimeCommands();
+
+  VkBufferImageCopy region{};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = 0;
+  region.imageSubresource.baseArrayLayer = 0;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {0, 0, 0};
+  region.imageExtent = {
+          (uint32_t)aTexWidth,
+          (uint32_t)aTexHeight,
+          1
+  };
+
+  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, textureImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  // EndSingleTimeCommands(commandBuffer);
+  // commandBuffer = BeginSingleTimeCommands();
+  //  SetImageLayout(commandBuffer, textureImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  //                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+  EndSingleTimeCommands(commandBuffer);
+
+  // transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  // copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+  //transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  vkDestroyBuffer(mDeviceInfo.device, stagingBuffer, nullptr);
+  vkFreeMemory(mDeviceInfo.device, stagingBufferMemory, nullptr);
+
+  texture.deviceMemory = textureImageMemory;
+  texture.image = textureImage;
+  const bool useStaging = true;
+  VkImageViewCreateInfo view {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = texture.format,
+          .components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
+          .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+          .subresourceRange.baseMipLevel   = 0,
+          .subresourceRange.baseArrayLayer = 0,
+          .subresourceRange.layerCount     = 1,
+          // Linear tiling usually won't support mip maps
+          // Only set mip map count if optimal tiling is used
+          .subresourceRange.levelCount = (useStaging) ? texture.mipLevels : 1,
+          // The view will be based on the texture's image
+          .image = texture.image,
+  };
+  CALL_VK(vkCreateImageView(mDeviceInfo.device, &view, nullptr, &texture.view));
+  texture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  // Create a texture sampler
+  VkSamplerCreateInfo samplerInfo {
+          .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+          .maxAnisotropy = 1.0f,
+          .magFilter = VK_FILTER_LINEAR,
+          .minFilter = VK_FILTER_LINEAR,
+          .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+          .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+          .mipLodBias = 0.0f,
+          .compareEnable = VK_FALSE,
+          .compareOp = VK_COMPARE_OP_NEVER,
+          .minLod = 0.0f,
+          .maxLod = (useStaging) ? (float) texture.mipLevels : 0.0f,
+  };
+
+  if (mDeviceInfo.gpuDeviceFeatures.samplerAnisotropy) {
+    samplerInfo.maxAnisotropy = mDeviceInfo.gpuDeviceProperties.limits.maxSamplerAnisotropy;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+  } else {
+    samplerInfo.maxAnisotropy = 1.0;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+  }
+
+  samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+  CALL_VK(vkCreateSampler(mDeviceInfo.device, &samplerInfo, nullptr, &texture.sampler));
+  aSurf->mTextures.push_back(texture);
+
+  return true;
+}
+
 bool VulkanRenderer::IsReady() {
   return mInitialized;
 }
@@ -1664,10 +1876,17 @@ void VulkanRenderer::DeleteTextures() {
 
 void VulkanRenderer::DeleteBuffers() {
   for (const auto& surf : mSurfaces) {
-    if (surf->mBuffer.vertexBuf) {
-      vkDestroyBuffer(mDeviceInfo.device, surf->mBuffer.vertexBuf, nullptr);
-      vkFreeMemory(mDeviceInfo.device, surf->mBuffer.vertexBufMemory, nullptr);
+    for (const auto& vtxBuf : surf->mBuffer.vertexBuf) {
+      vkDestroyBuffer(mDeviceInfo.device, vtxBuf, nullptr);
     }
+
+    for (const auto& vtxBufMem : surf->mBuffer.vertexBufMemory) {
+      vkFreeMemory(mDeviceInfo.device, vtxBufMem, nullptr);
+    }
+
+    surf->mBuffer.vertexBuf.clear();
+    surf->mBuffer.vertexBufMemory.clear();
+
     if (surf->mBuffer.indexBuf) {
       vkDestroyBuffer(mDeviceInfo.device, surf->mBuffer.indexBuf, nullptr);
       vkFreeMemory(mDeviceInfo.device, surf->mBuffer.indexBufMemory, nullptr);

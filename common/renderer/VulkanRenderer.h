@@ -30,6 +30,8 @@ public:
   void CreateIndexBuffer(const std::vector<uint16_t>& aIndexData, std::shared_ptr<RenderSurface> aSurf);
   void CreateUniformBuffer(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf);
   bool CreateTextureFromFile(const char* aFilePath, std::shared_ptr<RenderSurface> aSurf);
+  bool CreateTextureFromBuffer(const char* aBuffer, int aTexWidth, int aTexHeight,
+                               int aComponent, std::shared_ptr<RenderSurface> aSurf);
   void CreateDescriptorSetLayout(std::shared_ptr<RenderSurface> aSurf);
   void CreateDescriptorSet(VkDeviceSize aBufferSize, std::shared_ptr<RenderSurface> aSurf);
   void ConstructRenderPass();

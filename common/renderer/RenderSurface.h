@@ -18,13 +18,14 @@ public:
   enum VertexInputType {
     VertexInputType_Pos3,
     VertexInputType_Pos3Color4Normal3UV2,
+    VertexInputType_Pos3Normal3Tangent4UV2
   };
 
   int mVertexCount = 0;
-  int mInstanceCount = 0;
+  int mInstanceCount = 0; // no. of triangles in a mesh.
   int mFirstVertex = 0;
   int mFirstInstance = 0;
-  int mItemSize = 0;
+  int mItemSize = 0;    // no. of items in a vertex. (stride)
   int mIndexCount = 0;
   int mUBOSize = 0;
   VertexInputType mVertexInput = VertexInputType_Pos3;
@@ -32,8 +33,8 @@ public:
 
 private:
   struct VulkanBufferInfo {
-    VkBuffer vertexBuf = VK_NULL_HANDLE;
-    VkDeviceMemory vertexBufMemory = VK_NULL_HANDLE;
+    std::vector<VkBuffer> vertexBuf;
+    std::vector<VkDeviceMemory> vertexBufMemory;
     VkBuffer indexBuf = VK_NULL_HANDLE;
     VkDeviceMemory indexBufMemory = VK_NULL_HANDLE;
   };

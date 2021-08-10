@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">vulkanGLTF</string>
+    <string name="native_lib_name">vkexamples</string>
+</resources>
