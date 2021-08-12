@@ -48,7 +48,7 @@ We are currently running automatic build in Circle-CI and partial automatic test
 - [x] Texture mapping: Giving an example of how to load and create a texture in Vulkan, Then, in fragement shaders, how we fetch the texels of a texture.
 
 ### Advance
-- [ ] *glTF* model loader: Provide a *glTF* model loader and display *glTF* in Vulkan.
+- [x] *glTF* model loader: Provide a *glTF* model loader and display *glTF* in Vulkan.
 - [ ] Video playback with Vulkan.
 - [ ] Physically-based rendering: PBR material support.
 
